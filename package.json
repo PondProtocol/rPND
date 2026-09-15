@@ -1,0 +1,25 @@
+{
+  "name": "rpnd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "XRPL issuance toolkit for $PND (IOU) and $rPND (MPT).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "cli": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "test:live": "RUN_XRPL_LIVE=1 tsx --test test/live-devnet.test.ts"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "xrpl": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.6",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

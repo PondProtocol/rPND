@@ -1,0 +1,46 @@
+# xrp-ledger.toml template (XLS-26 [[TOKENS]] plus core [[ACCOUNTS]] / [[CURRENCIES]]).
+# Host at https://<ISSUER_DOMAIN>/.well-known/xrp-ledger.toml
+# then set the issuing account Domain to <ISSUER_DOMAIN>.
+#
+# Placeholders:
+#   {{ISSUER_ADDRESS}}  classic address of the cold issuer
+#   {{ISSUER_DOMAIN}}   domain that serves this file
+#   {{NETWORK}}         main | testnet | other
+#   {{RPND_ISSUANCE_ID}}  hex MPTokenIssuanceID once $rPND exists on that network
+
+METADATA_NOTICE = "This file describes rPND tokens. Addresses are authoritative only after AccountSet Domain matches this host."
+
+[[PRINCIPALS]]
+name = "rPND issuer"
+email = "replace-me@example.com"
+
+[[VALIDATORS]]
+
+[[SERVERS]]
+
+[[ACCOUNTS]]
+address = "{{ISSUER_ADDRESS}}"
+network = "{{NETWORK}}"
+desc = "Cold issuing account for $PND (IOU) and $rPND (MPT)."
+
+[[CURRENCIES]]
+code = "PND"
+issuer = "{{ISSUER_ADDRESS}}"
+network = "{{NETWORK}}"
+display_decimals = 6
+symbol = "$"
+
+[[TOKENS]]
+currency = "PND"
+issuer = "{{ISSUER_ADDRESS}}"
+name = "PND"
+desc = "PND issued currency (IOU) on the XRP Ledger."
+asset_class = "other"
+
+# Uncomment after MPTokenIssuanceCreate succeeds and explorers accept MPT rows.
+# [[TOKENS]]
+# currency = "RPND"
+# issuer = "{{ISSUER_ADDRESS}}"
+# name = "rPND"
+# desc = "rPND Multi-Purpose Token. On-ledger id: {{RPND_ISSUANCE_ID}}"
+# asset_class = "other"
