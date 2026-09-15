@@ -5,7 +5,9 @@
 
 **$rPND is the reward token of Pond Protocol — a Multi-Purpose Token (MPT) on the XRP Ledger.**
 
-It is an MPT rather than an IOU because rewards need things an IOU cannot do: a ledger-enforced supply ceiling, issuer-controlled on-ledger metadata, and per-issuance capability flags. Emission and reward mechanics are still being decided; [`docs/tokenomics.md`](docs/tokenomics.md) frames those choices.
+It is an MPT rather than an IOU because rewards need things an IOU cannot do: a ledger-enforced supply ceiling, issuer-controlled on-ledger metadata, and per-issuance capability flags. Emission and reward mechanics are not decided yet.
+
+**$PND launches first.** $rPND design work follows, so the $rPND parameters here remain provisional. For $PND, see [`docs/issuance.md`](docs/issuance.md).
 
 This repository is the **operator source of truth** for Pond Protocol's on-ledger token configuration and issuance tooling: $rPND's parameters, its XLS-89 metadata, and the scripts that configure an issuer and create the issuance. It also carries the issuance path for the sibling IOU, **$PND**, because both assets come from the same issuing account.
 
@@ -75,7 +77,7 @@ Capability flags are **one-way**. `MPTokenIssuanceSet` can enable a flag but not
 
 `assetScale` is `6`, so one display unit is 1,000,000 base units and all `value` fields in payments are in base units. `maximumAmount` is `1000000000000000` base units, which is 1,000,000,000 display units; the ledger's own ceiling is 2^63−1 base units. Final supply, initial mint, and scale are TODO for the owner.
 
-`maximumAmount` caps supply **in circulation**, not cumulative issuance: paying $rPND to the issuer burns it and frees headroom to mint again. [`docs/tokenomics.md`](docs/tokenomics.md) works through what that implies for a reward token.
+`maximumAmount` caps supply **in circulation**, not cumulative issuance: paying $rPND to the issuer burns it and frees headroom to mint again. A fixed cap is therefore a ceiling on circulating supply rather than a limit on total emission over time.
 
 ## Pond Protocol repos
 
@@ -141,7 +143,6 @@ npx tsx src/cli.ts status
 | Doc | Covers |
 | --- | --- |
 | [`docs/rpnd-spec.md`](docs/rpnd-spec.md) | $rPND token spec: fields, flags, metadata schema, amounts, lifecycle, invariants |
-| [`docs/tokenomics.md`](docs/tokenomics.md) | **Decision draft** — reward-token supply, emission, sinks, and the decisions blocking issuance |
 | [`docs/mpt-vs-iou.md`](docs/mpt-vs-iou.md) | Why $rPND is an MPT, in detail, and what it costs |
 | [`docs/tokens.md`](docs/tokens.md) | Token identity for both assets |
 | [`docs/issuance.md`](docs/issuance.md) | Issuance procedure and network notes |
@@ -161,7 +162,9 @@ $rPND is **not issued** on mainnet from this repo. There is no `MPTokenIssuanceI
 Tracked for the owner; none of these are decided:
 
 - `MPTokenIssuanceID` for $rPND, per network — does not exist until `MPTokenIssuanceCreate` succeeds
-- Issuer (cold) and operational classic addresses
+- Whether $rPND is issued from the same cold account as $PND, which would couple their account flags, `Domain`, and reserve exposure
+- $PND clawback and allow-listing, which close permanently at the issuer's first trust line
+- $PND distribution topology — one operational account, several, or staged tranches
 - Final `maximumAmount`, `initialIssuance`, and `assetScale`
 - Public domain for `ISSUER_DOMAIN` and XLS-26 hosting; production icon and URI values
 - Whether the on-ledger `issuer_name` in `config/tokens.json` should become `Pond Protocol` — it is currently `rPND`, and the change alters the XLS-89 blob, so it is an issuance decision rather than a docs edit
@@ -172,7 +175,7 @@ Tracked for the owner; none of these are decided:
 - Whether flags beyond clawback should be frozen at create, and whether metadata should be frozen with `tifMPTMetadata`
 - Mainnet amendment status at issuance time, including **DynamicMPT**, which the current create depends on because it sets `ImmutableFlags`
 
-The supply, emission, and reward decisions are worked through in [`docs/tokenomics.md`](docs/tokenomics.md), which separates what must be decided before issuance from what can be deferred.
+$rPND emission and reward mechanics are deferred until after the $PND launch. The $PND decisions that close permanently at its first trust line are in [`docs/issuance.md`](docs/issuance.md#decisions-that-close-at-the-first-trust-line).
 
 No security review or audit of this repository has been performed or commissioned.
 

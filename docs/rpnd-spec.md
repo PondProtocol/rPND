@@ -16,11 +16,13 @@ This file and the config it describes are authoritative for $rPND across Pond Pr
 | Issuer name | `rPND` | `rpnd.issuerName` |
 | Asset class | `other` | `rpnd.assetClass` |
 | On-ledger id | `MPTokenIssuanceID`, 192-bit / 48 hex chars | assigned by the ledger |
-| Issuer account | TODO — cold account address | `ISSUER_SEED` |
+| Issuer account | **TODO — undecided** | `ISSUER_SEED` |
 
 The `MPTokenIssuanceID` is derived by the ledger from the issuer account and the sequence of the create transaction. It does not exist until `MPTokenIssuanceCreate` is validated, and it differs per network. `src/state.ts` persists it to `var/<network>-issuance.json`; `extractMptIssuanceId` in `src/issuance.ts` reads it out of the transaction metadata.
 
 A ticker is not an identity. Only the `MPTokenIssuanceID` identifies $rPND. Any other issuance using ticker `RPND` is a different token.
+
+The $rPND issuer account is deliberately still undecided. The owner has designated `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` as the **$PND issuer only**; it must not be recorded here as the $rPND issuer until that call is made. Issuing both assets from one cold account couples their account flags, `Domain`, and reserve exposure — see [`issuance.md`](issuance.md#one-cold-account-or-two).
 
 TODO (owner): `issuerName` is `rPND`, so the on-ledger `issuer_name` reads `rPND` rather than `Pond Protocol`. Prose in this organization's repos now uses Pond Protocol branding; whether the XLS-89 field should follow is an issuance decision, not a docs edit, because it changes the encoded metadata blob and its byte count. Decide before the mainnet create.
 
@@ -57,7 +59,7 @@ Every `value` in an MPT `Payment` is a base-unit string. `rpndAmount()` builds `
 
 `MaximumAmount` is enforced by the ledger: once outstanding supply reaches it, further mints fail. Because it cannot be raised later, it is the one parameter that must be right before the create transaction.
 
-It caps `OutstandingAmount` — the amount **currently in circulation** — and not cumulative lifetime issuance. Any holder paying $rPND to the issuer burns it and decreases `OutstandingAmount`, which frees headroom the issuer can mint into again. A fixed `MaximumAmount` is therefore a ceiling on circulating supply, not a limit on how much is ever emitted. The issuer account also cannot hold its own MPT: conceptually it holds `MaximumAmount − OutstandingAmount`, which is why distributable inventory lives on the operational account. [`tokenomics.md`](tokenomics.md#3-supply-and-emission) works through what that means for emission.
+It caps `OutstandingAmount` — the amount **currently in circulation** — and not cumulative lifetime issuance. Any holder paying $rPND to the issuer burns it and decreases `OutstandingAmount`, which frees headroom the issuer can mint into again. A fixed `MaximumAmount` is therefore a ceiling on circulating supply, not a limit on how much is ever emitted. The issuer account also cannot hold its own MPT: conceptually it holds `MaximumAmount − OutstandingAmount`, which is why distributable inventory lives on the operational account.
 
 TODO (owner): confirm final `assetScale`, `maximumAmount`, and `initialIssuance`. Changing any of the first two after issuance requires destroying and re-creating the issuance, which changes the `MPTokenIssuanceID`.
 
@@ -131,7 +133,7 @@ So `tifMPTCanClawback` is doing real work: without it the issuer could enable cl
 
 Mutating `ImmutableFlags`, `MPTokenMetadata`, or `TransferFee` requires the **DynamicMPT** amendment, as does setting `ImmutableFlags` at create. Since this repo's create transaction sets it, the create depends on DynamicMPT and not on MPTokensV1 alone; without it the transaction fails with `temDISABLED`.
 
-TODO (owner): should any of `canTrade`, `requireAuth`, or `canEscrow` be frozen off so holders get the same permanence they get on clawback? Should metadata be frozen with `tifMPTMetadata` once production URLs are final? Both are decided per flag in [`tokenomics.md`](tokenomics.md#6-decisions-for-the-owner).
+TODO (owner): should any of `canTrade`, `requireAuth`, or `canEscrow` be frozen off so holders get the same permanence they get on clawback? Should metadata be frozen with `tifMPTMetadata` once production URLs are final? Both are $rPND design decisions, deferred until after the $PND launch.
 
 ## Lifecycle
 
