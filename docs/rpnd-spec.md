@@ -21,13 +21,15 @@ This file and the config it describes are authoritative for $rPND across Pond Pr
 | Issuer name | `rPND` | `rpnd.issuerName` |
 | Asset class | `other` | `rpnd.assetClass` |
 | On-ledger id | `MPTokenIssuanceID`, 192-bit / 48 hex chars | assigned by the ledger |
-| Issuer account | **TODO — undecided** | `ISSUER_SEED` |
+| Issuer account | **TODO — undecided for $rPND** | `ISSUER_SEED` |
 
 The `MPTokenIssuanceID` is derived by the ledger from the issuer account and the sequence of the create transaction. It does not exist until `MPTokenIssuanceCreate` is validated, and it differs per network. `src/state.ts` persists it to `var/<network>-issuance.json`; `extractMptIssuanceId` in `src/issuance.ts` reads it out of the transaction metadata.
 
 A ticker is not an identity. Only the `MPTokenIssuanceID` identifies $rPND. Any other issuance using ticker `RPND` is a different token.
 
-The $rPND issuer account is deliberately still undecided. The owner has designated `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` as the **$PND issuer only**; it must not be recorded here as the $rPND issuer until that call is made. Issuing both assets from one cold account couples their account flags, `Domain`, and reserve exposure — see [`issuance.md`](issuance.md#one-cold-account-or-two).
+**The $PND issuer is `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc`. The $rPND issuer is undecided and is deliberately left blank here.** The known address is assigned to $PND only; recording it as the $rPND issuer would pre-empt a decision the owner has not made, and would be a $PND blocker rather than an $rPND convenience — account flags, `Domain`, and blackholing are all account-level, so a shared issuer lets undecided $rPND choices constrain $PND. See [`issuance.md`](issuance.md#one-cold-account-or-two).
+
+An empty `account_objects` on that address independently confirms **no `MPTokenIssuance` exists from it**, so nothing below has been applied on any network.
 
 TODO (owner): `issuerName` is `rPND`, so the on-ledger `issuer_name` reads `rPND` rather than `Pond Protocol`. Prose in this organization's repos now uses Pond Protocol branding; whether the XLS-89 field should follow is an issuance decision, not a docs edit, because it changes the encoded metadata blob and its byte count. Decide before the mainnet create.
 
@@ -35,14 +37,16 @@ TODO (owner): `issuerName` is `rPND`, so the on-ledger `issuer_name` reads `rPND
 
 Produced by `buildRpndIssuanceCreate`. Verify with `npx tsx src/cli.ts dry-run`.
 
-| Field | Value | Changeable after create |
-| --- | --- | --- |
-| `AssetScale` | `6` | **No — permanent** |
-| `MaximumAmount` | `1000000000000000` | **No — permanent** |
-| `MPTokenMetadata` | XLS-89 hex, 249 bytes | Yes, via `MPTokenIssuanceSet`, unless frozen |
-| `Flags` | `34` = `tfMPTCanTransfer` + `tfMPTCanLock` | Per flag, see below |
-| `ImmutableFlags` | `64` = `tifMPTCanClawback` | **No — permanent.** Requires DynamicMPT; rejected with `temDISABLED` on mainnet today |
-| `TransferFee` | omitted (`rpnd.transferFee` is `0`) | Yes, unless frozen |
+**Nothing in this table is on the ledger.** No `MPTokenIssuance` exists from any Pond Protocol account, so the middle column is empty by fact, not by omission.
+
+| Field | Config intends | On ledger now | Effect once applied |
+| --- | --- | --- | --- |
+| `AssetScale` | `6` | — no issuance | **Permanent.** No transaction can ever change it |
+| `MaximumAmount` | `1000000000000000` | — no issuance | **Permanent.** Cannot be raised or lowered |
+| `MPTokenMetadata` | XLS-89 hex, 249 bytes | — no issuance | Changeable via `MPTokenIssuanceSet` where DynamicMPT is live, unless frozen |
+| `Flags` | `34` = `tfMPTCanTransfer` + `tfMPTCanLock` | — no issuance | Per flag, see below. Enable-only |
+| `ImmutableFlags` | `64` = `tifMPTCanClawback` | — no issuance | **Permanent.** Requires DynamicMPT, so this field is rejected with `temDISABLED` on mainnet |
+| `TransferFee` | omitted (`rpnd.transferFee` is `0`) | — no issuance | Changeable where DynamicMPT is live, unless frozen |
 
 `TransferFee` is only emitted when greater than zero, so the create transaction currently carries no such field. A transfer fee requires `tfMPTCanTransfer`.
 
@@ -104,13 +108,13 @@ TODO (owner): replace the `example.com` icon and URI with production URLs before
 
 Set from `rpnd.flags` by `mptCreateFlags()`.
 
-| Config key | Flag | Bit | Current | Effect |
-| --- | --- | --- | --- | --- |
-| `canTransfer` | `tfMPTCanTransfer` | 32 | **on** | Holders may transfer to third parties. Without it, holders can only send back to the issuer. |
-| `canLock` | `tfMPTCanLock` | 2 | **on** | Issuer may lock the issuance or an individual holder's balance. |
-| `canTrade` | `tfMPTCanTrade` | 16 | off | Declares intent to allow DEX / AMM use. MPT DEX and AMM support is gated by the **MPTokensV2** amendment (XLS-82), which is **not enabled on mainnet**, so the flag grants nothing today — `OfferCreate` and `AMMCreate` return `temDISABLED` for MPTs even with it set. |
-| `requireAuth` | `tfMPTRequireAuth` | 4 | off | Issuer must authorize each holder individually. |
-| `canClawback` | `tfMPTCanClawback` | 64 | off | Issuer may claw back holder balances. |
+| Config key | Flag | Bit | Config intends | On ledger now | Effect once applied |
+| --- | --- | --- | --- | --- | --- |
+| `canTransfer` | `tfMPTCanTransfer` | 32 | **on** | — no issuance | Holders may transfer to third parties. Without it, holders can only send back to the issuer. |
+| `canLock` | `tfMPTCanLock` | 2 | **on** | — no issuance | Issuer may lock the issuance or an individual holder's balance — permanently, see below. |
+| `canTrade` | `tfMPTCanTrade` | 16 | off | — no issuance | Would declare intent to allow DEX / AMM use. Gated by the **MPTokensV2** amendment (XLS-82), which is **not enabled on mainnet**, so it grants nothing today — `OfferCreate` and `AMMCreate` return `temDISABLED` for MPTs even with it set. |
+| `requireAuth` | `tfMPTRequireAuth` | 4 | off | — no issuance | Issuer must authorize each holder individually. |
+| `canClawback` | `tfMPTCanClawback` | 64 | off | — no issuance | Issuer may claw back holder balances. |
 
 Not exposed in config and therefore unset: `tfMPTCanEscrow` (8), `tfMPTCanHoldConfidentialBalance` (128).
 
@@ -120,19 +124,17 @@ Not exposed in config and therefore unset: `tfMPTCanEscrow` (8), `tfMPTCanHoldCo
 
 ### Immutable flags
 
-`mptImmutableFlags()` emits `ImmutableFlags` from `rpnd.immutable`. Only `canClawback` is set, giving `tifMPTCanClawback` (64).
+`mptImmutableFlags()` emits `ImmutableFlags` from `rpnd.immutable`. The config sets only `canClawback` there, which would put `tifMPTCanClawback` (64) on a create transaction. Nothing is frozen on any ledger, because no issuance exists.
 
 The intent is a permanent guarantee: clawback off at create, frozen so the issuer cannot enable it later. **On a network with DynamicMPT that means no holder of $rPND can ever have their balance confiscated by the issuer.** On mainnet today it is unachievable, because the transaction that would establish it is rejected. Leaving the flag off is still possible; backing it with an on-ledger guarantee is not.
 
 **Capability flags are one-way.** This is easy to misread. `MPTokenIssuanceSet` can *enable* a capability flag (`tfMPTSetCanLock`, `tfMPTSetRequireAuth`, `tfMPTSetCanEscrow`, `tfMPTSetCanTrade`, `tfMPTSetCanTransfer`, `tfMPTSetCanClawback`), but there is no operation that disables one. Once on, a capability stays on.
 
-Since no issuance exists, the column below is what each setting *would* fix at the create transaction — not the current position.
-
-| Flag | Config | Effect of creating as configured |
-| --- | --- | --- |
-| `canTransfer`, `canLock` | on | Would become permanent; could never be revoked. |
-| `canTrade`, `requireAuth`, `canEscrow` | off | Could be enabled later where DynamicMPT is live, then never revoked. Not enableable on mainnet today. |
-| `canClawback` | off, freeze requested | Would be unreachable forever — but only where the freeze can be set. |
+| Flag | Config intends | On ledger now | Effect once applied |
+| --- | --- | --- | --- |
+| `canTransfer`, `canLock` | on | — no issuance | Would become permanent; could never be revoked. |
+| `canTrade`, `requireAuth`, `canEscrow` | off | — no issuance | Could be enabled later where DynamicMPT is live, then never revoked. Not enableable on mainnet today. |
+| `canClawback` | off, freeze requested | — no issuance | Would be unreachable forever — but only where the freeze can be set. |
 
 `tifMPTCanClawback` is doing real work where it is available: without it the issuer could enable clawback at any later point via `tfMPTSetCanClawback`. It is the freeze, not the initial off state, that makes the guarantee permanent.
 

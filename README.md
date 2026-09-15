@@ -56,13 +56,15 @@ npx tsx src/cli.ts encode-metadata   # prints the JSON, its hex, and its byte co
 
 Capabilities are declared once in `config/tokens.json` and mapped to real XRPL flags in `src/issuance.ts`.
 
-| Config | XRPL flag | Current | Meaning |
+No $rPND issuance exists on any network, so none of this is configured yet — the middle column is empty by fact.
+
+| Config intends | XRPL flag | On ledger now | Effect once applied |
 | --- | --- | --- | --- |
-| `canTransfer` | `tfMPTCanTransfer` | on | Holders may transfer to each other, not only back to the issuer |
-| `canLock` | `tfMPTCanLock` | on | Issuer may lock balances via `MPTokenIssuanceSet` |
-| `canTrade` | `tfMPTCanTrade` | off | Declares intent to allow DEX / AMM use, but MPT trading needs the MPTokensV2 amendment, which mainnet does not have |
-| `requireAuth` | `tfMPTRequireAuth` | off | Issuer must approve each holder |
-| `canClawback` | `tfMPTCanClawback` | off | Issuer may claw back balances |
+| `canTransfer` on | `tfMPTCanTransfer` | — no issuance | Holders may transfer to each other, not only back to the issuer |
+| `canLock` on | `tfMPTCanLock` | — no issuance | Issuer may lock balances via `MPTokenIssuanceSet`, permanently |
+| `canTrade` off | `tfMPTCanTrade` | — no issuance | Would declare intent to allow DEX / AMM use, but MPT trading needs the MPTokensV2 amendment, which mainnet does not have |
+| `requireAuth` off | `tfMPTRequireAuth` | — no issuance | Issuer must approve each holder |
+| `canClawback` off | `tfMPTCanClawback` | — no issuance | Issuer may claw back balances |
 
 `tfMPTCanEscrow` and `tfMPTCanHoldConfidentialBalance` are not set.
 

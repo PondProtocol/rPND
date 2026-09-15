@@ -34,12 +34,25 @@ This tooling assumes a **single** cold account issues both assets: `ISSUER_SEED`
 
 The owner has designated `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` as the **$PND issuer**. It is **not** assigned as the $rPND issuer, and `rpnd-spec.md` deliberately still lists the $rPND issuer as TODO.
 
-Verified on mainnet at time of writing: the account is **funded but entirely unconfigured** — 2.539034 XRP, `Flags` `0`, `OwnerCount` `0`, no `Domain`, no `RegularKey`. Two consequences:
+The account is **funded but entirely unconfigured**: `Flags` is `0` with all fifteen account flags false, `OwnerCount` is `0`, and `account_lines` and `account_objects` are both empty. Read it yourself rather than trusting a figure here — balances, sequence numbers, and ledger indexes all move, so this repo does not pin them:
 
-- `OwnerCount` is `0`, so the owner directory is empty and everything in [Decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) is still open.
-- `Flags` is `0`, so **`asfDefaultRipple` is not set.** `configure-issuer` sets it from `pnd.defaultRipple`, and it has not been run. Beyond letting balances move between holders, `asfDefaultRipple` is a hard prerequisite for an AMM: `AMMCreate` fails with `terNO_RIPPLE` without it.
+```bash
+curl -sS -X POST https://xrplcluster.com -H 'Content-Type: application/json' \
+  -d '{"method":"account_info","params":[{"account":"rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc","ledger_index":"validated"}]}'
+curl -sS -X POST https://xrplcluster.com -H 'Content-Type: application/json' \
+  -d '{"method":"account_objects","params":[{"account":"rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc","ledger_index":"validated"}]}'
+```
 
-The account also has no `Domain` yet, so the XLS-26 two-way link described under [Metadata publication](#metadata-publication) does not exist.
+What to check, and why each matters:
+
+| Field | Expect while unconfigured | Why it matters |
+| --- | --- | --- |
+| `OwnerCount` / `account_objects` | `0` / empty | An empty owner directory is what keeps the clawback window open. Also independently confirms no `MPTokenIssuance` exists from this account |
+| `Flags` | `0` | **`asfDefaultRipple` is not set.** Beyond letting balances move between holders, it is a hard prerequisite for an AMM: `AMMCreate` fails with `terNO_RIPPLE` without it |
+| `Domain` | absent | The XLS-26 two-way link under [Metadata publication](#metadata-publication) does not exist yet |
+| `RegularKey` | absent | See custody below |
+
+**Custody today is a single master seed.** There is no `RegularKey` and the master key is enabled, so one seed controls the account outright. The obvious hardening — a `SignerList` for multi-signature custody — **creates an owner object**, and a non-empty owner directory permanently closes the `asfAllowTrustLineClawback` window. So custody hardening and the clawback decision are ordered with respect to each other: decide clawback first, or lose it. `SetRegularKey` creates no owner object and is safe at any point, which makes it the one custody improvement with no ordering constraint. See [Decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line).
 
 > [!IMPORTANT]
 > **This is a $PND blocker, not an $rPND one.** The coupling runs in the direction that is easy to get backwards: flags, `Domain`, and blackholing are all properties of the *account*, not of an asset. So if one account issues both, every $rPND decision constrains $PND — and $rPND has not been designed yet. Deciding this is therefore on the $PND critical path, even though $rPND is deferred.
