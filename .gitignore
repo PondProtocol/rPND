@@ -8,3 +8,15 @@ var/
 *.log
 .DS_Store
 *.tsbuildinfo
+npm-debug.log*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Never commit key material. var/ already holds faucet output.
+*-wallets.json
+*.seed
+*.pem
+secrets.json
