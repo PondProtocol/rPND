@@ -2,6 +2,8 @@
 
 rPND issues two related XRP Ledger assets. They are not interchangeable on ledger: one is a classic issued currency, the other is an MPT.
 
+This file is the summary of both. For $rPND specifically, [`rpnd-spec.md`](rpnd-spec.md) is the normative spec — parameters, flags, metadata schema, lifecycle, and invariants — and [`mpt-vs-iou.md`](mpt-vs-iou.md) records why $rPND is an MPT.
+
 ## $PND — IOU
 
 - **Kind:** issued currency (IOU) on trust lines
