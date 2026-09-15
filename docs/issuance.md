@@ -1,6 +1,22 @@
 # Issuance
 
-Use Devnet until the transactions and metadata look correct. Ripple periodically resets Devnet and Testnet; do not reuse those keys on mainnet.
+Ripple periodically resets Devnet and Testnet; never reuse those keys on mainnet.
+
+## Rehearse on Testnet, not Devnet
+
+> [!IMPORTANT]
+> Pick the rehearsal network by its amendment set, not by habit. **Testnet mirrors mainnet** (`MPTokensV1` enabled, `DynamicMPT` not), so it reproduces what mainnet will do. **Devnet has `DynamicMPT` enabled**, so it accepts transactions mainnet rejects — a green Devnet rehearsal is not evidence that a mainnet create will work.
+
+This is not hypothetical. The $rPND create this repo builds from the committed config carries `ImmutableFlags`, which requires `DynamicMPT`. Submitted to Testnet it returns **`temDISABLED`**; the same transaction without `ImmutableFlags` returns `tesSUCCESS`. On Devnet the original succeeds. A Devnet-only rehearsal would therefore have passed and the failure would have surfaced on launch day.
+
+| Amendment | Mainnet | Gates |
+| --- | --- | --- |
+| `MPTokensV1` | enabled | MPTs at all |
+| `TokenEscrow` | enabled | MPT escrow — the only working lockup primitive |
+| `Clawback` | enabled | IOU clawback, opt-in per issuer account |
+| `DynamicMPT` | **not enabled** | `ImmutableFlags`; changing metadata, transfer fee, or flags after create |
+
+Amendment status is a point-in-time observation. Re-check it against the live ledger before any mainnet operation. `config/tokens.json` tracks only `supportsMpt` per network, which is necessary but not sufficient — it does not model `DynamicMPT`.
 
 ## Accounts
 
@@ -72,7 +88,7 @@ TODO (owner): choose the topology before mainnet. Full supply reachable by one h
 
 ## $rPND (MPT)
 
-Requires an MPT-capable network (Devnet in this repo’s defaults; Testnet is flagged `supportsMpt: false`).
+Requires an MPT-capable network. `MPTokensV1` is live on mainnet, Testnet, and Devnet; `config/tokens.json` now marks all three `supportsMpt: true` (the previous `false` for Testnet was stale).
 
 1. `issue-rpnd` — `MPTokenIssuanceCreate` with XLS-89 metadata from `config/tokens.json`.
 2. Unless `--create-only`, operational `MPTokenAuthorize` then issuer `Payment` of the MPT.
@@ -80,7 +96,9 @@ Requires an MPT-capable network (Devnet in this repo’s defaults; Testnet is fl
 
 `AssetScale` and `MaximumAmount` are fixed for the life of the issuance. Review them before the create transaction.
 
-Clawback is not enabled, and `tifMPTCanClawback` is set so the issuer cannot add clawback later.
+**As configured, step 1 fails on mainnet.** `tifMPTCanClawback` is requested via `ImmutableFlags`, which needs `DynamicMPT`. Where the amendment is absent the create returns `temDISABLED`; where it is present, clawback is genuinely frozen off. The decision is to wait for the amendment or to create without the freeze and treat "no clawback" as policy rather than an on-ledger guarantee. Note that on a pre-`DynamicMPT` network no flag can be enabled afterwards either, so an unfrozen clawback flag cannot actually be switched on until the amendment lands — at which point it could be, unless frozen promptly.
+
+$rPND issuance is not on the $PND launch path; none of this blocks $PND.
 
 ## Metadata publication
 
@@ -92,4 +110,6 @@ Explorers that implement XLS-26 will scrape that file. $rPND discovery also depe
 
 ## Mainnet
 
-There is no faucet command on mainnet. Fund accounts independently, confirm amendment support for MPTs, replace placeholder icon/URI/domain values, then submit the same transaction sequence with production seeds held outside this repo.
+There is no faucet command on mainnet. Fund accounts independently, re-confirm amendment status against the live ledger, replace placeholder icon/URI/domain values, then submit the same transaction sequence with production seeds held outside this repo.
+
+For $PND specifically, settle [the decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) and the [distribution topology](#trust-limit-and-distribution-topology) before step 2 of the $PND sequence. For $rPND, resolve the `ImmutableFlags` / `DynamicMPT` position first, since the create cannot succeed on mainnet as configured.

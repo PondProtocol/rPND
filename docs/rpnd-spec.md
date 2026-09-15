@@ -2,7 +2,12 @@
 
 $rPND is the Multi-Purpose Token of Pond Protocol on the XRP Ledger. This file is the normative description of the issuance: what is fixed, what the issuer can still change, and what the ledger enforces.
 
-**Status:** not issued on mainnet. Parameter values below are the current contents of `config/tokens.json`, which is the single source consumed by `src/metadata.ts` and `src/issuance.ts`. They are working defaults, not ratified economics.
+**Status:** not issued on any network. Parameter values below are the current contents of `config/tokens.json`, which is the single source consumed by `src/metadata.ts` and `src/issuance.ts`. They are working defaults, not ratified economics.
+
+> [!WARNING]
+> **The create transaction this config builds cannot succeed on mainnet.** `ImmutableFlags` requires the DynamicMPT amendment, which is not enabled on mainnet. Verified on Testnet — which mirrors mainnet's amendment set — using `buildRpndIssuanceCreate` with the committed config: the create returns **`temDISABLED`**, and the identical transaction with `ImmutableFlags` removed returns `tesSUCCESS`. Rehearse on Testnet, not Devnet: Devnet has DynamicMPT enabled and will accept a transaction mainnet rejects.
+
+Because nothing exists on ledger yet, **no $rPND property is permanent today.** This file describes what each value *would* fix at create. Every "permanent" below means permanent from the create transaction onward, not already settled.
 
 This file and the config it describes are authoritative for $rPND across Pond Protocol's repos. If a document elsewhere in the organization disagrees, the config here is correct and the other document needs updating.
 
@@ -36,7 +41,7 @@ Produced by `buildRpndIssuanceCreate`. Verify with `npx tsx src/cli.ts dry-run`.
 | `MaximumAmount` | `1000000000000000` | **No — permanent** |
 | `MPTokenMetadata` | XLS-89 hex, 249 bytes | Yes, via `MPTokenIssuanceSet`, unless frozen |
 | `Flags` | `34` = `tfMPTCanTransfer` + `tfMPTCanLock` | Per flag, see below |
-| `ImmutableFlags` | `64` = `tifMPTCanClawback` | **No — permanent** |
+| `ImmutableFlags` | `64` = `tifMPTCanClawback` | **No — permanent.** Requires DynamicMPT; rejected with `temDISABLED` on mainnet today |
 | `TransferFee` | omitted (`rpnd.transferFee` is `0`) | Yes, unless frozen |
 
 `TransferFee` is only emitted when greater than zero, so the create transaction currently carries no such field. A transfer fee requires `tfMPTCanTransfer`.
@@ -103,11 +108,13 @@ Set from `rpnd.flags` by `mptCreateFlags()`.
 | --- | --- | --- | --- | --- |
 | `canTransfer` | `tfMPTCanTransfer` | 32 | **on** | Holders may transfer to third parties. Without it, holders can only send back to the issuer. |
 | `canLock` | `tfMPTCanLock` | 2 | **on** | Issuer may lock the issuance or an individual holder's balance. |
-| `canTrade` | `tfMPTCanTrade` | 16 | off | Permits DEX / AMM use. |
+| `canTrade` | `tfMPTCanTrade` | 16 | off | Would permit DEX / AMM use. MPT trading on the DEX and AMM is **not implemented on any network yet**, so the flag currently grants nothing. |
 | `requireAuth` | `tfMPTRequireAuth` | 4 | off | Issuer must authorize each holder individually. |
 | `canClawback` | `tfMPTCanClawback` | 64 | off | Issuer may claw back holder balances. |
 
 Not exposed in config and therefore unset: `tfMPTCanEscrow` (8), `tfMPTCanHoldConfidentialBalance` (128).
+
+`tfMPTCanEscrow` is worth singling out. `TokenEscrow` is enabled on mainnet, so escrow is the one lockup primitive actually available for MPTs — and because enabling a flag after create needs DynamicMPT, creating on mainnet today without `canEscrow` forfeits escrow-based lockups and vesting permanently. The config has no field for it.
 
 `requireAuth` being off does **not** mean holders need no action. Every holder must still submit `MPTokenAuthorize` to create their `MPToken` object before they can receive $rPND. What `requireAuth` adds is a second, issuer-side approval.
 
@@ -115,17 +122,23 @@ Not exposed in config and therefore unset: `tfMPTCanEscrow` (8), `tfMPTCanHoldCo
 
 `mptImmutableFlags()` emits `ImmutableFlags` from `rpnd.immutable`. Only `canClawback` is set, giving `tifMPTCanClawback` (64).
 
-The effect is a permanent guarantee: clawback is off at create, and because the setting is frozen the issuer cannot enable it later with `MPTokenIssuanceSet`. **No holder of $rPND can have their balance confiscated by the issuer.**
+The intent is a permanent guarantee: clawback off at create, frozen so the issuer cannot enable it later. **On a network with DynamicMPT that means no holder of $rPND can ever have their balance confiscated by the issuer.** On mainnet today it is unachievable, because the transaction that would establish it is rejected. Leaving the flag off is still possible; backing it with an on-ledger guarantee is not.
 
-**Capability flags are one-way.** This is easy to misread. `MPTokenIssuanceSet` can *enable* a capability flag (`tfMPTSetCanLock`, `tfMPTSetRequireAuth`, `tfMPTSetCanEscrow`, `tfMPTSetCanTrade`, `tfMPTSetCanTransfer`, `tfMPTSetCanClawback`), but there is no operation that disables one. Once on, a capability stays on. The practical consequences for $rPND:
+**Capability flags are one-way.** This is easy to misread. `MPTokenIssuanceSet` can *enable* a capability flag (`tfMPTSetCanLock`, `tfMPTSetRequireAuth`, `tfMPTSetCanEscrow`, `tfMPTSetCanTrade`, `tfMPTSetCanTransfer`, `tfMPTSetCanClawback`), but there is no operation that disables one. Once on, a capability stays on.
 
-| Flag | State | What remains possible |
+Since no issuance exists, the column below is what each setting *would* fix at the create transaction — not the current position.
+
+| Flag | Config | Effect of creating as configured |
 | --- | --- | --- |
-| `canTransfer`, `canLock` | on at create | Permanent. Cannot be revoked. |
-| `canTrade`, `requireAuth`, `canEscrow` | off | May be enabled later, then never revoked. |
-| `canClawback` | off and frozen | Unreachable forever. |
+| `canTransfer`, `canLock` | on | Would become permanent; could never be revoked. |
+| `canTrade`, `requireAuth`, `canEscrow` | off | Could be enabled later where DynamicMPT is live, then never revoked. Not enableable on mainnet today. |
+| `canClawback` | off, freeze requested | Would be unreachable forever — but only where the freeze can be set. |
 
-So `tifMPTCanClawback` is doing real work: without it the issuer could enable clawback at any later point via `tfMPTSetCanClawback`. It is the freeze, not the initial off state, that makes the guarantee permanent.
+`tifMPTCanClawback` is doing real work where it is available: without it the issuer could enable clawback at any later point via `tfMPTSetCanClawback`. It is the freeze, not the initial off state, that makes the guarantee permanent.
+
+**Lock authority is the mirror image.** Creating with `canLock` on means lock authority over $rPND is permanent and **can never be renounced** — there is no disable operation, and freezing the flag only pins it on. The IOU side has no such trap: an IOU issuer can permanently give up freeze power with `asfNoFreeze`. Nothing in this repo should suggest $rPND lock authority could be surrendered later. A create with the current config would hand holders a permanent no-clawback promise and permanent lock authority on the same token, which is a defensible pairing but an odd one to arrive at by default.
+
+**On mainnet today, flags do not move in either direction.** Every `tfMPTSet*` enable path requires DynamicMPT, so a flag set chosen at create is fixed until the amendment activates, and one-way after that. The same applies to `MPTokenMetadata` and `TransferFee`: mutable in principle, frozen in practice on mainnet.
 
 `tifMPTMetadata` (65536) and `tifMPTTransferFee` (131072) would freeze the metadata blob and the transfer fee. Neither is set, so both stay mutable.
 
@@ -133,7 +146,7 @@ So `tifMPTCanClawback` is doing real work: without it the issuer could enable cl
 
 Mutating `ImmutableFlags`, `MPTokenMetadata`, or `TransferFee` requires the **DynamicMPT** amendment, as does setting `ImmutableFlags` at create. Since this repo's create transaction sets it, the create depends on DynamicMPT and not on MPTokensV1 alone; without it the transaction fails with `temDISABLED`.
 
-TODO (owner): should any of `canTrade`, `requireAuth`, or `canEscrow` be frozen off so holders get the same permanence they get on clawback? Should metadata be frozen with `tifMPTMetadata` once production URLs are final? Both are $rPND design decisions, deferred until after the $PND launch.
+TODO (owner): the first decision is whether to issue before DynamicMPT activates, because that determines whether anything below is deferrable. If issuing on mainnet today, the flag set, the metadata, and the transfer fee are all fixed at create, and no immutability commitment is possible — so `canEscrow`, `canTrade`, and `requireAuth` all become blocking rather than deferrable. If issuing under DynamicMPT, they can be enabled later and optionally frozen off instead. These are $rPND design decisions, deferred until after the $PND launch.
 
 ## Lifecycle
 
@@ -160,7 +173,9 @@ These must hold for any $rPND issuance produced by this repo. The tests in `test
 
 ## Relationship to $PND
 
-Both are Pond Protocol tokens from the same issuing account, but they are two unrelated ledger assets. $PND is an IOU identified by code `PND` plus the issuer address and held on trust lines; $rPND is an MPT identified by its `MPTokenIssuanceID` and held in `MPToken` objects. A $PND balance confers no claim on $rPND or the reverse.
+Both are Pond Protocol tokens, and they are two unrelated ledger assets. $PND is an IOU identified by code `PND` plus the issuer address and held on trust lines; $rPND is an MPT identified by its `MPTokenIssuanceID` and held in `MPToken` objects. A $PND balance confers no claim on $rPND or the reverse.
+
+Whether they share an issuing account is **undecided**. The tooling assumes one cold account today, but that is a default rather than a design — see [`issuance.md`](issuance.md#one-cold-account-or-two) for the coupling a shared account would create.
 
 `paired_iou_currency` in the metadata is a hint for indexers and operators. The ledger enforces no ratio, no peg, and no atomic conversion between an IOU and an MPT.
 
