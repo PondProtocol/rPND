@@ -1,6 +1,6 @@
 # Security
 
-This repository builds and submits XRP Ledger transactions that issue assets. The sensitive material is not the code — it is the issuer keys and the token parameters.
+This repository builds and submits the XRP Ledger transactions that issue Pond Protocol's tokens. The sensitive material is not the code — it is the issuer keys and the token parameters.
 
 ## Reporting a vulnerability
 

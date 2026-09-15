@@ -5,7 +5,9 @@
 
 **$rPND is the Multi-Purpose Token (MPT) of Pond Protocol on the XRP Ledger.**
 
-This repository is the operator source of truth for $rPND: its on-ledger parameters, its XLS-89 metadata, and the scripts that configure an issuer and create the issuance. It also carries the sibling IOU, **$PND**, because both assets come from the same issuing account.
+This repository is the **operator source of truth** for Pond Protocol's on-ledger token configuration and issuance tooling: $rPND's parameters, its XLS-89 metadata, and the scripts that configure an issuer and create the issuance. It also carries the issuance path for the sibling IOU, **$PND**, because both assets come from the same issuing account.
+
+Where another Pond Protocol repo describes a token, `config/tokens.json` and `src/issuance.ts` here are authoritative on any mismatch.
 
 | | $PND | $rPND |
 | --- | --- | --- |
@@ -69,21 +71,26 @@ Capabilities are declared once in `config/tokens.json` and mapped to real XRPL f
 
 `assetScale` is `6`, so one display unit is 1,000,000 base units and all `value` fields in payments are in base units. `maximumAmount` is `1000000000000000` base units, which is 1,000,000,000 display units; the ledger's own ceiling is 2^63−1 base units. Final supply, initial mint, and scale are TODO for the owner.
 
-## How this repo fits together
+## Pond Protocol repos
 
-| Repo | Contents |
+| Repo | Role |
 | --- | --- |
-| [`pondprotocol/rpnd`](https://github.com/pondprotocol/rpnd) | This repo — $rPND parameters, metadata, and the issuance toolkit (and $PND's issuance, since the issuer is shared) |
-| [`pondprotocol/pnd`](https://github.com/pondprotocol/pnd) | $PND, the IOU |
+| [`pondprotocol/rpnd`](https://github.com/pondprotocol/rpnd) | **This repo.** $rPND the MPT, plus the operator source of truth for on-ledger config and issuance tooling for both tokens |
+| [`pondprotocol/pnd`](https://github.com/pondprotocol/pnd) | $PND the IOU — token-facing reference, holder and integrator docs |
 | [`pondprotocol/protocol`](https://github.com/pondprotocol/protocol) | Pond Protocol itself |
+| [`pondprotocol/.github`](https://github.com/pondprotocol/.github) | Organization profile |
 
-TODO (owner): the `pnd` and `protocol` repos are currently placeholders. Once they have content, state here which repo is authoritative for $PND's parameters — today they live in this repo's `config/tokens.json` because the issuing account is shared — and what role $rPND plays in the Protocol (utility, fees, governance, or something else). This README deliberately does not guess.
+The split between this repo and `pnd` is deliberate: `pnd` explains $PND to holders, wallets, and indexers, while the parameters both tokens are issued with live here in `config/tokens.json`. $PND's issuance path is in this repo because the issuing account is shared with $rPND. On any disagreement between a doc there and the config here, this repo wins.
+
+TODO (owner): what role $rPND plays in the Protocol — utility, fees, governance, or something else — is not defined in `protocol` yet, so this README does not guess.
 
 ### Relationship to $PND
 
-At the ledger level the relationship is documentary only. $rPND's metadata carries `additional_info.paired_iou_currency = "PND"` so indexers and operators can see the intended pairing, but the XRPL does not link an IOU and an MPT, does not enforce a ratio between them, and offers no atomic swap between the two. Any conversion, redemption, or backing relationship would be a policy implemented off ledger or in the Protocol.
+Both are Pond Protocol tokens issued from the same cold account, but at the ledger level the relationship is documentary only. $rPND's metadata carries `additional_info.paired_iou_currency = "PND"` so indexers and operators can see the intended pairing, but the XRPL does not link an IOU and an MPT, does not enforce a ratio between them, and offers no atomic swap between the two. Any conversion, redemption, or backing relationship would be a policy implemented off ledger or in the Protocol.
 
 TODO (owner): whether $PND and $rPND are convertible, in which direction, at what ratio, and who operates that — all undefined. Nothing in this repo should be read as a redemption promise.
+
+The `pnd` repo covers $PND from the holder and integrator side, including its own IOU-vs-MPT comparison. [`docs/mpt-vs-iou.md`](docs/mpt-vs-iou.md) here is the view from the MPT.
 
 ## Quick start
 
@@ -150,6 +157,7 @@ Tracked for the owner; none of these are decided:
 - Issuer (cold) and operational classic addresses
 - Final `maximumAmount`, `initialIssuance`, and `assetScale`
 - Public domain for `ISSUER_DOMAIN` and XLS-26 hosting; production icon and URI values
+- Whether the on-ledger `issuer_name` in `config/tokens.json` should become `Pond Protocol` — it is currently `rPND`, and the change alters the XLS-89 blob, so it is an issuance decision rather than a docs edit
 - Legal issuer entity and key custody policy
 - $PND ↔ $rPND conversion policy, if any
 - $rPND's role in Pond Protocol

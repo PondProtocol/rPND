@@ -1,8 +1,8 @@
 # Why $rPND is an MPT
 
-The XRP Ledger offers two ways to issue a fungible asset: a classic issued currency ("IOU") on trust lines, or a Multi-Purpose Token. $rPND is an MPT. This file records why, and what that choice costs.
+The XRP Ledger offers two ways to issue a fungible asset: a classic issued currency ("IOU") on trust lines, or a Multi-Purpose Token. Pond Protocol issues one of each — $PND as an IOU, $rPND as an MPT. This file records why $rPND is the MPT, and what that choice costs.
 
-This is a comparison of ledger primitives. Why Pond Protocol has both a $PND IOU and an $rPND MPT at all is a product question, and it is TODO for the owner — see [`rpnd-spec.md`](rpnd-spec.md#relationship-to-pnd).
+This is a comparison of ledger primitives. The economic relationship between the two Pond Protocol tokens is a product question and is still TODO for the owner — see [`rpnd-spec.md`](rpnd-spec.md#relationship-to-pnd).
 
 ## Side by side
 
@@ -43,6 +43,6 @@ This is a comparison of ledger primitives. Why Pond Protocol has both a $PND IOU
 
 ## Why $PND remains an IOU
 
-$PND is an issued currency with code `PND` and is issued from the same cold account as $rPND. This repo does not convert it to an MPT.
+$PND is an issued currency with code `PND`, issued from the same cold account as $rPND. This repo does not convert it to an MPT, and the tradeoff table above shows why that is defensible on its own terms: an IOU works in every wallet, explorer, and venue today, with no dependency on the MPTokens amendment. The `pnd` repo documents $PND for holders and integrators, and covers the same comparison from the IOU side.
 
-TODO (owner): the reason both exist, and their intended division of roles, is not documented anywhere in this organization's repos. State it in [`../README.md`](../README.md) once decided. What is true on ledger today: they are separate assets, the pairing is recorded only as `additional_info.paired_iou_currency` metadata, and no ledger mechanism binds them.
+TODO (owner): the economic division of roles between the two tokens is not yet defined in the `protocol` repo. State it in [`../README.md`](../README.md) once decided. What is true on ledger today: they are separate assets, the pairing is recorded only as `additional_info.paired_iou_currency` metadata, and no ledger mechanism binds them.

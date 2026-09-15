@@ -1,6 +1,8 @@
 # Contributing
 
-This repo issues real assets. Most files here are ordinary TypeScript, but `config/tokens.json` is the token itself — treat changes to it differently from changes to code.
+This repo issues Pond Protocol's on-ledger assets. Most files here are ordinary TypeScript, but `config/tokens.json` is the token itself — treat changes to it differently from changes to code.
+
+It is also the operator source of truth for the organization: other Pond Protocol repos document these tokens by reference and defer to the config here. A parameter change may require a follow-up in `pnd` or `protocol`; note that in the PR.
 
 ## Setup
 
