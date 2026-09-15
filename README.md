@@ -159,7 +159,7 @@ Local faucet output is written to `var/` (gitignored). Treat seeds as secrets.
 
 ## Networks
 
-$rPND needs `MPTokensV1`, which is live on mainnet and Testnet. Two further amendments are **not** live on mainnet: **DynamicMPT** (XLS-94), needed for `ImmutableFlags` and for changing metadata, transfer fee, or flags after create; and **MPTokensV2** (XLS-82), needed for MPT DEX and AMM support. Mainnet issuance is a separate, reviewed operation — this repo does not faucet-fund mainnet accounts, and amendment status must be re-confirmed against the live ledger before any create.
+$rPND needs `MPTokensV1`, which is live on mainnet and Testnet. **DynamicMPT is not**, which is why the committed config cannot be created on mainnet, and MPTs cannot trade there at all. `config/tokens.json` records only a single `supportsMpt` boolean per network, which is true for mainnet but too coarse to act on — [`docs/issuance.md`](docs/issuance.md#what-supportsmpt-true-does-and-does-not-tell-you) separates out what it does and does not imply. Mainnet issuance is a separate, reviewed operation: this repo does not faucet-fund mainnet accounts, and amendment status must be re-confirmed against the live ledger before any create.
 
 **Rehearse on Testnet, not Devnet.** Testnet mirrors mainnet's amendment set (`MPTokensV1` on, `DynamicMPT` off). Devnet has `DynamicMPT` on, so it accepts transactions mainnet rejects — which is exactly how the blocker below would reach launch day unnoticed.
 
@@ -178,6 +178,7 @@ Tracked for the owner; none of these are decided:
 - Whether $rPND is issued from the same cold account as $PND — a **$PND blocker**, since flags, `Domain`, and blackholing are account-level, so a shared account lets undecided $rPND choices constrain $PND
 - $PND clawback and allow-listing, which close permanently at the issuer's first owner object — including a signer list, so multi-sig custody setup closes them too. Clawback and `asfNoFreeze` are also mutually exclusive
 - $PND distribution topology — one operational account, several, or staged tranches
+- Whether $PND supply is escrowed. `TokenEscrow` is enabled on mainnet so IOU escrow works, but it requires the one-way `asfAllowTrustLineLocking` flag, and this toolkit has **no** `EscrowCreate`/`EscrowFinish` support at all
 - Whether to issue $rPND before DynamicMPT activates, which decides how many of the flag choices below are permanent
 - Whether to drop `immutable.canClawback` so a create can succeed on mainnet today, or wait for the amendment
 - Whether `canEscrow` should be enabled at create — it is not in the config at all, and on mainnet it cannot be added later, so creating without it forfeits escrow-based lockups and vesting

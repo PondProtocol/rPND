@@ -9,15 +9,26 @@ Ripple periodically resets Devnet and Testnet; never reuse those keys on mainnet
 
 This is not hypothetical. The $rPND create this repo builds from the committed config carries `ImmutableFlags`, which requires `DynamicMPT`. Submitted to Testnet it returns **`temDISABLED`**; the same transaction without `ImmutableFlags` returns `tesSUCCESS`. On Devnet the original succeeds. A Devnet-only rehearsal would therefore have passed and the failure would have surfaced on launch day.
 
+Verified against mainnet:
+
 | Amendment | Mainnet | Gates |
 | --- | --- | --- |
 | `MPTokensV1` | enabled | MPTs at all |
-| `TokenEscrow` | enabled | MPT escrow — the only working lockup primitive |
+| `Escrow`, `TokenEscrow`, `fixTokenEscrowV1` | enabled | Escrow, including **escrow of issued currencies** — see [IOU escrow](#iou-escrow-and-the-tooling-gap) |
+| `fixMPTDeliveredAmount` | enabled | Correct `delivered_amount` reporting for MPT payments |
 | `Clawback` | enabled | IOU clawback, opt-in per issuer account |
+| `AMM`, `AMMClawback` | enabled | AMM pools for IOUs |
 | `DynamicMPT` | **not enabled** | `ImmutableFlags`; changing metadata, transfer fee, or flags after create |
-| `MPTokensV2` | **not enabled** | MPT DEX and AMM support. Until it activates, $rPND cannot trade anywhere; $PND as an IOU can. |
 
-Amendment status is a point-in-time observation. Re-check it against the live ledger before any mainnet operation. `config/tokens.json` tracks only `supportsMpt` per network, which is necessary but not sufficient — it does not model `DynamicMPT`.
+### What `supportsMpt: true` does and does not tell you
+
+The config's `supportsMpt: true` for mainnet is **correct but not precise enough to act on.** It collapses three separate facts into one boolean, and they point in different directions:
+
+1. **An $rPND issuance is possible on mainnet in principle.** `MPTokensV1` is enabled, so MPTs exist, can be held, and can be paid directly.
+2. **The current config nonetheless fails on mainnet**, with `temDISABLED`, because it sets `ImmutableFlags` — which requires `DynamicMPT`, and that is not enabled. "MPTs are supported" and "this create will succeed" are different claims.
+3. **MPTs cannot trade on mainnet at all.** `OfferCreate` and `AMMCreate` return `temDISABLED` for MPTs even with `CanTrade` set, so there is no order book, no AMM pool, and no on-ledger price for an MPT. `AMM` being enabled applies to IOUs, which is why $PND can be pooled and $rPND cannot.
+
+Because one boolean cannot express those three, do not treat `supportsMpt` as a pre-flight check for a create. Re-read the live amendment set instead — status changes by validator vote, which is why this repo records no ledger index alongside it.
 
 ## Accounts
 
@@ -87,7 +98,7 @@ Holders who are not the operational account must send their own `TrustSet` befor
 | `asfAllowTrustLineClawback` (16) | Only settable while the owner directory is **empty** — no trust lines, offers, escrows, payment channels, checks, or signer lists. Cannot be reverted once set. Requires the Clawback amendment. | $PND can **never** be clawed back. Permanent. |
 | `asfRequireAuth` (2) | Only settable while the account has no trust lines. | $PND can never be made allow-list only. |
 | `asfNoFreeze` (6) | Can never be disabled once enabled. Must be signed with the master key pair. | Retaining freeze power is the default; giving it up stays available later, but only in one direction. |
-| `asfAllowTrustLineLocking` (17) | Cannot be disabled once enabled. Requires the TokenEscrow amendment. | $PND cannot be placed in escrow. |
+| `asfAllowTrustLineLocking` (17) | Cannot be disabled once enabled. Requires the TokenEscrow amendment, which **is** enabled on mainnet. No owner-directory constraint, so it can be set later — but it must precede any escrow. | $PND cannot be placed in escrow, so any escrowed-supply plan is blocked. See [IOU escrow](#iou-escrow-and-the-tooling-gap). |
 
 The issuer's `OwnerCount` is `0` today, so all four are open. The window for the first two closes the moment step 2 runs.
 
@@ -106,6 +117,18 @@ The issuer's `OwnerCount` is `0` today, so all four are open. The window for the
 "Set neither" is the only outcome that keeps a future option open, and it is where the account sits now. That is a legitimate choice rather than an absence of one — but it is only *open* until the first owner object exists, after which clawback is gone and only the `asfNoFreeze` half remains decidable.
 
 TODO (owner): decide clawback and allow-listing for $PND **before** the first `TrustSet` on mainnet, and before any multi-sig custody setup. Clawback is the mirror image of the $rPND decision — for the MPT it is set at issuance create, for the IOU before the first owner object, and in both cases it is one-way. `configure-issuer` supports none of these flags today, and `SetFlag` carries only one value per transaction, so each needs its own `AccountSet`.
+
+### IOU escrow and the tooling gap
+
+`TokenEscrow` is enabled on mainnet, and it is not MPT-only: **an issued currency can be held in escrow on mainnet today.** That makes a staged-release distribution — part of supply circulating, the rest escrowed on a schedule — mechanically available for $PND.
+
+Two things this repo has to say about it. The schedule itself is being designed and rehearsed elsewhere and is deliberately not specified here.
+
+**There is no escrow support in this tooling at all.** `src/` contains no `EscrowCreate`, `EscrowFinish`, or `EscrowCancel` builder, and no CLI command for any of them. The full command list is `fund`, `configure-issuer`, `issue-pnd`, `issue-rpnd`, `authorize-rpnd`, `send-pnd`, `send-rpnd`, `status`, `encode-metadata`, `render-toml`, `dry-run`. Any escrow work is entirely manual today, including the `FinishAfter` / `Condition` fields that encode a release schedule, and the repeated `EscrowFinish` submissions a monthly release implies. If escrowed distribution is going ahead, this is a real gap to close rather than a detail.
+
+**It also depends on a one-way issuer flag.** An IOU can only be escrowed if its issuer has `asfAllowTrustLineLocking` (flag 17) enabled — without it, tokens issued by the account cannot be escrowed at all — and **that flag cannot be disabled once set.** It appears in the one-way table above. Unlike clawback it has no empty-owner-directory constraint, so it can be set after the first trust line; but it must be set *before* any escrow is created, and `configure-issuer` does not support it. So an escrowed-supply plan adds a required `AccountSet` that no command currently builds.
+
+TODO (owner): if supply is to be escrowed, enable `asfAllowTrustLineLocking` on the issuer and add escrow support to the toolkit, or accept that the escrow steps are hand-built and signed outside it.
 
 ### Trust limit and distribution topology
 
