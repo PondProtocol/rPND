@@ -95,3 +95,46 @@ test(
     }
   },
 );
+
+test(
+  "on-ledger Domain decodes to lowercase after a mixed-case input",
+  { skip: live ? false : "set RUN_XRPL_LIVE=1 to hit XRPL Devnet" },
+  async () => {
+    // The offline tests assert on what we encode. They cannot catch the
+    // silent-failure class this guards, where the value that actually lands on
+    // ledger is wrong: a mixed-case Domain is accepted with tesSUCCESS and only
+    // breaks XLS-26 verification, which reports nothing. So read the AccountRoot
+    // back and decode what the ledger holds.
+    const runtime = await connectRuntime({ network: "devnet" });
+    try {
+      const issuer = (await runtime.client.fundWallet()).wallet;
+      const mixedCase = "PoNd.ExAmPlE.cOm";
+
+      await submitTx(
+        runtime.client,
+        buildIssuerAccountSet({
+          issuerAddress: issuer.address,
+          config: runtime.config,
+          domain: mixedCase,
+        }),
+        issuer,
+        "live configure-issuer with mixed-case domain",
+      );
+
+      const info = await runtime.client.request({
+        command: "account_info",
+        account: issuer.address,
+        ledger_index: "validated",
+      });
+
+      const onLedgerHex = info.result.account_data.Domain;
+      assert.ok(onLedgerHex, "expected a Domain on the AccountRoot");
+      const decoded = Buffer.from(onLedgerHex, "hex").toString("utf8");
+
+      assert.equal(decoded, decoded.toLowerCase(), `on-ledger Domain is not lowercase: ${decoded}`);
+      assert.equal(decoded, mixedCase.toLowerCase());
+    } finally {
+      await runtime.client.disconnect();
+    }
+  },
+);

@@ -173,8 +173,8 @@ $rPND is **not issued** on any network from this repo. There is no `MPTokenIssua
 Tracked for the owner; none of these are decided:
 
 - `MPTokenIssuanceID` for $rPND, per network — does not exist until `MPTokenIssuanceCreate` succeeds
-- Whether $rPND is issued from the same cold account as $PND, which would couple their account flags, `Domain`, and reserve exposure
-- $PND clawback and allow-listing, which close permanently at the issuer's first trust line
+- Whether $rPND is issued from the same cold account as $PND — a **$PND blocker**, since flags, `Domain`, and blackholing are account-level, so a shared account lets undecided $rPND choices constrain $PND
+- $PND clawback and allow-listing, which close permanently at the issuer's first owner object — including a signer list, so multi-sig custody setup closes them too. Clawback and `asfNoFreeze` are also mutually exclusive
 - $PND distribution topology — one operational account, several, or staged tranches
 - Whether to issue $rPND before DynamicMPT activates, which decides how many of the flag choices below are permanent
 - Whether to drop `immutable.canClawback` so a create can succeed on mainnet today, or wait for the amendment

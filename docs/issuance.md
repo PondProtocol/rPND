@@ -41,16 +41,20 @@ Verified on mainnet at time of writing: the account is **funded but entirely unc
 
 The account also has no `Domain` yet, so the XLS-26 two-way link described under [Metadata publication](#metadata-publication) does not exist.
 
+> [!IMPORTANT]
+> **This is a $PND blocker, not an $rPND one.** The coupling runs in the direction that is easy to get backwards: flags, `Domain`, and blackholing are all properties of the *account*, not of an asset. So if one account issues both, every $rPND decision constrains $PND — and $rPND has not been designed yet. Deciding this is therefore on the $PND critical path, even though $rPND is deferred.
+
 If one account issues both, the two assets are coupled in ways that cannot be undone selectively:
 
 - **Account flags are shared.** `AccountSet` is per account, not per asset. `asfDefaultRipple`, `asfRequireAuth`, `asfGlobalFreeze`, `asfNoFreeze`, and `asfAllowTrustLineClawback` apply to the account, so an IOU policy choice made for $PND also lands on anything else that account issues. Several of these are irreversible.
 - **`Domain` is shared.** One account has one `Domain`, so both assets resolve to the same XLS-26 `xrp-ledger.toml` and the same operator identity.
 - **Reserve and key exposure are shared.** Each `MPTokenIssuance` costs the issuer 0.2 XRP in owner reserve, and every holder's MPT balance is tracked in the issuer's owner directory too. One compromised or unusable cold key affects both assets at once.
 - **Blast radius is shared.** `asfGlobalFreeze` on the account freezes all its IOUs together.
+- **Blackholing is shared and terminal.** Blackholing the account after the $PND launch would permanently end its ability to create an MPT. If this address is meant to issue $rPND, then "blackhole" is not available as a $PND decision at all.
 
 Note that MPT capability flags are per issuance and so are *not* shared — the coupling is on the IOU/account side. Using a separate cold account for $rPND would decouple all of the above at the cost of a second key to custody and a second `Domain` or a shared one by convention.
 
-TODO (owner): decide whether $rPND is issued from this same account or a separate one. The decision is only cheap while the $rPND issuance does not exist. It does not block the $PND launch, but issuing $PND first from this account does constrain what a shared-account $rPND would inherit.
+TODO (owner): decide whether $rPND is issued from this same account or a separate one, **before the $PND flag decisions below.** Given that $rPND is deferred, a separate account for it is the reading that keeps the $PND decisions independent. Answering this also clears the issuer TODO in [`rpnd-spec.md`](rpnd-spec.md).
 
 ## $PND (IOU)
 
@@ -67,20 +71,37 @@ Holders who are not the operational account must send their own `TrustSet` befor
 
 | Flag | Constraint | Consequence of launching without it |
 | --- | --- | --- |
-| `asfAllowTrustLineClawback` (16) | Only settable while the owner directory is empty — no trust lines, offers, escrows, payment channels, checks, or signer lists. Cannot be reverted once set. Requires the Clawback amendment. | $PND can **never** be clawed back. Permanent. |
+| `asfAllowTrustLineClawback` (16) | Only settable while the owner directory is **empty** — no trust lines, offers, escrows, payment channels, checks, or signer lists. Cannot be reverted once set. Requires the Clawback amendment. | $PND can **never** be clawed back. Permanent. |
 | `asfRequireAuth` (2) | Only settable while the account has no trust lines. | $PND can never be made allow-list only. |
 | `asfNoFreeze` (6) | Can never be disabled once enabled. Must be signed with the master key pair. | Retaining freeze power is the default; giving it up stays available later, but only in one direction. |
 | `asfAllowTrustLineLocking` (17) | Cannot be disabled once enabled. Requires the TokenEscrow amendment. | $PND cannot be placed in escrow. |
 
-Because the designated $PND issuer does not exist on any network yet, all four are still open. The window for the first two closes the moment step 2 runs.
+The issuer's `OwnerCount` is `0` today, so all four are open. The window for the first two closes the moment step 2 runs.
 
-TODO (owner): decide clawback and allow-listing for $PND **before** the first `TrustSet` on mainnet. Clawback in particular is the mirror image of the $rPND decision — for the MPT it is set at issuance create, for the IOU it is set before the first trust line, and in both cases it is one-way. `configure-issuer` would need a flag to support any of these; none is implemented today.
+**Two traps in this table that are easy to miss.**
+
+*The clawback window closes on any owner object, not just a trust line.* Reproduced on Testnet: `SignerListSet` followed by `SetFlag: 16` returns **`tecOWNERS`**, exactly as a trust line does. So **hardening the cold issuer with multi-signature custody before deciding clawback silently forecloses clawback forever** — a sensible-looking security step that quietly spends a one-way decision. Any custody change that creates a `SignerList` must come *after* the clawback `AccountSet`. `SetRegularKey` creates no owner object and is safe at any point.
+
+*Clawback and `asfNoFreeze` are mutually exclusive.* They are one decision with three outcomes, not two independent flags. Reproduced on Testnet in both directions, each returning **`tecNO_PERMISSION`** when the other is already set:
+
+| Outcome | Can claw back | Can freeze | Still open later |
+| --- | --- | --- | --- |
+| Set clawback | Yes, permanently | Individual and global freeze remain | No |
+| Set `asfNoFreeze` | Never | Individual freeze gone; a global freeze could be started but never lifted | No |
+| Set neither (current state) | Never | Individual and global freeze remain | `asfNoFreeze` stays available |
+
+"Set neither" is the only outcome that keeps a future option open, and it is where the account sits now. That is a legitimate choice rather than an absence of one — but it is only *open* until the first owner object exists, after which clawback is gone and only the `asfNoFreeze` half remains decidable.
+
+TODO (owner): decide clawback and allow-listing for $PND **before** the first `TrustSet` on mainnet, and before any multi-sig custody setup. Clawback is the mirror image of the $rPND decision — for the MPT it is set at issuance create, for the IOU before the first owner object, and in both cases it is one-way. `configure-issuer` supports none of these flags today, and `SetFlag` carries only one value per transaction, so each needs its own `AccountSet`.
 
 ### Trust limit and distribution topology
 
 A trust line limit is the maximum the *holder* is willing to accept from the issuer, so the operational account cannot receive more $PND than its own limit allows.
 
 `pnd.operationalTrustLimit` is now `100000000000`, matching the 100,000,000,000 total supply the owner set for $PND and documented in the `pnd` repo. It was previously `1000000000` — one hundredth of that — which meant a single operational account could not take delivery of full supply. Unlike the MPT's `AssetScale` and `MaximumAmount`, a trust limit is not permanent: the holder can raise or lower it with another `TrustSet` at any time, so this is a safe default rather than a commitment.
+
+> [!WARNING]
+> **An undersized limit is worse than a failed payment.** Reproduced on Testnet: a `TrustSet` with limit 1,000,000,000 succeeds, and a `Payment` of 100,000,000,000 against it then returns **`tecPATH_PARTIAL`**. Because `tec` codes are *included in a validated ledger*, that outcome **consumes the issuer's sequence number** and burns the fee. In an offline batch-signing session — where several transactions are pre-signed with consecutive sequence numbers — the failure does not simply stop at the bad payment: every subsequent pre-signed blob is now numbered wrongly and must be re-signed, which means another trip to the air-gapped signer. Raising the limit first avoids a broken signing batch, not just a rejected payment.
 
 Raising the default does not by itself decide the topology, and a limit at or above full supply is compatible with all of these:
 
