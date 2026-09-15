@@ -125,7 +125,9 @@ The effect is a permanent guarantee: clawback is off at create, and because the 
 
 So `tifMPTCanClawback` is doing real work: without it the issuer could enable clawback at any later point via `tfMPTSetCanClawback`. It is the freeze, not the initial off state, that makes the guarantee permanent.
 
-`tifMPTMetadata` (65536) and `tifMPTTransferFee` (131072) would freeze the metadata blob and the transfer fee. Neither is set, so both stay mutable. `ImmutableFlags` is also accepted on `MPTokenIssuanceSet`, so a flag that is currently off can be frozen off later — but only while it is still off.
+`tifMPTMetadata` (65536) and `tifMPTTransferFee` (131072) would freeze the metadata blob and the transfer fee. Neither is set, so both stay mutable.
+
+`ImmutableFlags` can be declared at create or later with `MPTokenIssuanceSet`, and it is **additive**: each declaration adds to what is already fixed, never replaces it, and can never be cleared. So a flag that is currently off can be frozen off later — but only while it is still off, since enabling is irreversible. Freezing a flag that is already on records a fact rather than changing anything, which is why freezing `canTransfer` or `canLock` now would add nothing.
 
 Mutating `ImmutableFlags`, `MPTokenMetadata`, or `TransferFee` requires the **DynamicMPT** amendment, as does setting `ImmutableFlags` at create. Since this repo's create transaction sets it, the create depends on DynamicMPT and not on MPTokensV1 alone; without it the transaction fails with `temDISABLED`.
 

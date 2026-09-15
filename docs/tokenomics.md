@@ -80,6 +80,8 @@ Two implications worth absorbing. First, the "non-transferable reward points" op
 
 `MPTokenMetadata`, `TransferFee`, and `DomainID`, plus the lock/unlock state. Metadata and transfer fee are mutable *by default* but can each be frozen permanently (`tifMPTMetadata`, `tifMPTTransferFee`).
 
+`ImmutableFlags` is additive and can be declared at create or later: each declaration adds to what is already fixed and can never be cleared. That allows the design to be settled in stages — for example, freezing metadata once production URLs are final while leaving the transfer fee open longer.
+
 ### Amendment dependencies
 
 Worth verifying before a mainnet create, because the failure mode is a rejected transaction:
@@ -213,7 +215,7 @@ Changeable later on ledger, or purely off-ledger policy.
 | 10 | What earns $rPND | Depends on the Protocol; blocked on `protocol`, not on issuance. |
 | 11 | Which sink is load-bearing | Can start with burn-to-issuer, which needs no flags. |
 | 12 | `TransferFee` value | Mutable by default; requires `tfMPTCanTransfer`, which is already on. |
-| 13 | Enable `tfMPTCanTrade` for DEX/AMM | Enableable later, never revocable. Defer until a listing plan exists. |
+| 13 | Enable `tfMPTCanTrade` for DEX/AMM | Enableable later, never revocable. Easy to defer: xrpl.org notes DEX trading of MPTs is **not currently implemented**, so enabling it today would have no effect. |
 | 14 | Enable `tfMPTCanEscrow` for lock-ups | Enableable later; also needs TokenEscrow. |
 | 15 | Allow-listing via `tfMPTRequireAuth` / `DomainID` | Enableable later, never revocable. Adds gatekeeping and the holder-first ordering. |
 | 16 | Metadata: icon, URIs, `issuer_name` | Mutable unless frozen with `tifMPTMetadata`. Still placeholders. |
