@@ -178,7 +178,7 @@ Tracked for the owner; none of these are decided:
 - Whether $rPND is issued from the same cold account as $PND — a **$PND blocker**, since flags, `Domain`, and blackholing are account-level, so a shared account lets undecided $rPND choices constrain $PND
 - $PND clawback and allow-listing, which close permanently at the issuer's first owner object — including a signer list, so multi-sig custody setup closes them too. Clawback and `asfNoFreeze` are also mutually exclusive
 - $PND distribution topology — one operational account, several, or staged tranches
-- Whether $PND supply is escrowed. `TokenEscrow` is enabled on mainnet so IOU escrow works, but it requires the one-way `asfAllowTrustLineLocking` flag, and this toolkit has **no** `EscrowCreate`/`EscrowFinish` support at all
+- Whether $PND supply is escrowed. `TokenEscrow` is enabled on mainnet so IOU escrow works, and it needs `asfAllowTrustLineLocking` on the issuer — reversible, but `buildIssuerAccountSet` structurally cannot set it, and the toolkit has **no** escrow commands at all. Escrow also requires a separate treasury account, since the issuer cannot be an escrow sender
 - Whether to issue $rPND before DynamicMPT activates, which decides how many of the flag choices below are permanent
 - Whether to drop `immutable.canClawback` so a create can succeed on mainnet today, or wait for the amendment
 - Whether `canEscrow` should be enabled at create — it is not in the config at all, and on mainnet it cannot be added later, so creating without it forfeits escrow-based lockups and vesting

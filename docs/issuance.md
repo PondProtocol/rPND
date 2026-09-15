@@ -98,7 +98,7 @@ Holders who are not the operational account must send their own `TrustSet` befor
 | `asfAllowTrustLineClawback` (16) | Only settable while the owner directory is **empty** — no trust lines, offers, escrows, payment channels, checks, or signer lists. Cannot be reverted once set. Requires the Clawback amendment. | $PND can **never** be clawed back. Permanent. |
 | `asfRequireAuth` (2) | Only settable while the account has no trust lines. | $PND can never be made allow-list only. |
 | `asfNoFreeze` (6) | Can never be disabled once enabled. Must be signed with the master key pair. | Retaining freeze power is the default; giving it up stays available later, but only in one direction. |
-| `asfAllowTrustLineLocking` (17) | Cannot be disabled once enabled. Requires the TokenEscrow amendment, which **is** enabled on mainnet. No owner-directory constraint, so it can be set later — but it must precede any escrow. | $PND cannot be placed in escrow, so any escrowed-supply plan is blocked. See [IOU escrow](#iou-escrow-and-the-tooling-gap). |
+`asfAllowTrustLineLocking` (17) previously appeared in this table. **It does not belong here: it is reversible and has no owner-directory constraint.** See [IOU escrow](#iou-escrow-and-the-tooling-gap).
 
 The issuer's `OwnerCount` is `0` today, so all four are open. The window for the first two closes the moment step 2 runs.
 
@@ -120,15 +120,44 @@ TODO (owner): decide clawback and allow-listing for $PND **before** the first `T
 
 ### IOU escrow and the tooling gap
 
-`TokenEscrow` is enabled on mainnet, and it is not MPT-only: **an issued currency can be held in escrow on mainnet today.** That makes a staged-release distribution — part of supply circulating, the rest escrowed on a schedule — mechanically available for $PND.
+`TokenEscrow` is enabled on mainnet, and it is not MPT-only: **an issued currency can be held in escrow on mainnet today.** That makes a staged-release distribution — part of supply circulating, the rest escrowed on a schedule — mechanically available for $PND. The schedule itself is designed and owned elsewhere and is deliberately not specified here.
 
-Two things this repo has to say about it. The schedule itself is being designed and rehearsed elsewhere and is deliberately not specified here.
+### `asfAllowTrustLineLocking` is reversible — correcting this file
 
-**There is no escrow support in this tooling at all.** `src/` contains no `EscrowCreate`, `EscrowFinish`, or `EscrowCancel` builder, and no CLI command for any of them. The full command list is `fund`, `configure-issuer`, `issue-pnd`, `issue-rpnd`, `authorize-rpnd`, `send-pnd`, `send-rpnd`, `status`, `encode-metadata`, `render-toml`, `dry-run`. Any escrow work is entirely manual today, including the `FinishAfter` / `Condition` fields that encode a release schedule, and the repeated `EscrowFinish` submissions a monthly release implies. If escrowed distribution is going ahead, this is a real gap to close rather than a detail.
+An earlier revision of this document stated that flag 17 "cannot be disabled once set" and listed it among the one-way decisions. **That was wrong**, and it is corrected here because the claim was relayed to the owner on the strength of this file.
 
-**It also depends on a one-way issuer flag.** An IOU can only be escrowed if its issuer has `asfAllowTrustLineLocking` (flag 17) enabled — without it, tokens issued by the account cannot be escrowed at all — and **that flag cannot be disabled once set.** It appears in the one-way table above. Unlike clawback it has no empty-owner-directory constraint, so it can be set after the first trust line; but it must be set *before* any escrow is created, and `configure-issuer` does not support it. So an escrowed-supply plan adds a required `AccountSet` that no command currently builds.
+The error came from trusting documentation over the ledger: xrpl.org's [AccountSet](https://xrpl.org/docs/references/protocol/transactions/types/accountset) reference says of flag 17 "After you enable this flag, it cannot be disabled." The ledger disagrees. Verified on Testnet across three consecutive set/clear cycles, with the `allowTrustLineLocking` account flag read back from `account_info` each time:
 
-TODO (owner): if supply is to be escrowed, enable `asfAllowTrustLineLocking` on the issuer and add escrow support to the toolkit, or accept that the escrow steps are hand-built and signed outside it.
+```
+SetFlag 17   -> tesSUCCESS  (allowTrustLineLocking = true)
+ClearFlag 17 -> tesSUCCESS  (allowTrustLineLocking = false)
+```
+
+Accurate statement:
+
+- **Settable and clearable.** `ClearFlag: 17` succeeds, repeatedly.
+- **No owner-directory constraint.** Unlike `asfAllowTrustLineClawback`, it can be set after trust lines exist, so it is not a now-or-never decision.
+- **Clearing it is not a kill switch.** Existing escrows can still be finished after the flag is cleared. Clearing it prevents *new* escrows of this issuer's tokens; it does not claw back or freeze escrows already created.
+
+Where xrpl.org and the ledger disagree, the ledger wins — and this is a reminder that a rehearsal against a live network catches things a specification read does not.
+
+### Escrow facts that contradict common assumptions
+
+All verified on Testnet.
+
+- **The issuer cannot be an escrow sender.** `EscrowCreate` from the issuing account returns `tecNO_PERMISSION` even with flag 17 set. So escrowed distribution **requires a separate treasury account** holding the tokens — the issuer cannot escrow its own obligations directly.
+- **Escrowed IOUs are excluded from `gateway_balances` obligations.** Escrowing does not inflate reported outstanding supply, so a supply figure read from `gateway_balances` will not double-count escrowed tranches. Decide explicitly whether published supply figures mean issued, circulating, or unescrowed before quoting one.
+- **`TransferRate` must be exactly `0` for tranches to deliver exact amounts.** With a 0.5% rate, a 9,000,000,000 tranche delivered 8,955,223,880.597015. `config/tokens.json` already sets `transferRate: 0`, which is the correct value for this plan — but it is changeable while the issuer lives, so it is worth treating as a constraint rather than a default.
+
+### The tooling gap
+
+Two concrete gaps, both on the **$PND** path rather than $rPND's.
+
+**`buildIssuerAccountSet` structurally cannot set flag 17.** It hard-assigns `tx.SetFlag = AccountSetAsfFlags.asfDefaultRipple`, with no parameter to pass anything else, and `SetFlag` carries exactly one value per transaction. So `configure-issuer` cannot produce the `AccountSet` that escrowing $PND requires, and the same limitation blocks `asfAllowTrustLineClawback`, `asfNoFreeze`, and `asfRequireAuth`. Each needs its own transaction, and none has a builder.
+
+**There are no escrow commands at all.** None of the twelve CLI commands — `help`, `fund`, `configure-issuer`, `issue-pnd`, `issue-rpnd`, `authorize-rpnd`, `send-pnd`, `send-rpnd`, `status`, `encode-metadata`, `render-toml`, `dry-run` — touches escrow, and `src/` contains no `EscrowCreate`, `EscrowFinish`, or `EscrowCancel` builder. Escrow work is therefore entirely hand-built today, including the `FinishAfter` / `Condition` fields that encode a release schedule and the repeated `EscrowFinish` submissions a monthly release implies.
+
+TODO (owner): if supply is to be escrowed, either extend `buildIssuerAccountSet` to take a flag and add escrow builders, or accept that both the flag-17 `AccountSet` and every escrow transaction are hand-built and signed outside this toolkit.
 
 ### Trust limit and distribution topology
 
