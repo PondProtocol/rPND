@@ -10,7 +10,7 @@ import {
   type TransactionMetadata,
   type TrustSet,
 } from "xrpl";
-import { encodeRpndMetadata } from "./metadata.ts";
+import { domainToHex, encodeRpndMetadata } from "./metadata.ts";
 import type { IssuedAmount, MptAmount, TokenConfig } from "./types.ts";
 
 export function pndAmount(issuer: string, value: string, config: TokenConfig): IssuedAmount {
@@ -52,7 +52,7 @@ export function buildIssuerAccountSet(params: {
     tx.Flags = flags;
   }
   if (params.domain) {
-    tx.Domain = Buffer.from(params.domain.trim(), "utf8").toString("hex").toUpperCase();
+    tx.Domain = domainToHex(params.domain);
   }
   return tx;
 }

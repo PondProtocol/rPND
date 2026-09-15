@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { decodeMPTokenMetadata } from "xrpl";
 import { loadTokenConfig } from "../src/config.ts";
-import { encodeRpndMetadata, renderXrpLedgerToml, rpndMetadata } from "../src/metadata.ts";
+import { domainToHex, encodeRpndMetadata, renderXrpLedgerToml, rpndMetadata } from "../src/metadata.ts";
 
 test("XLS-89 metadata encodes under the 1024-byte cap and round-trips", () => {
   const hex = encodeRpndMetadata();
@@ -18,6 +18,26 @@ test("XLS-89 metadata encodes under the 1024-byte cap and round-trips", () => {
 test("rPND metadata records the paired $PND IOU", () => {
   const meta = rpndMetadata();
   assert.equal((meta.additional_info as { paired_iou_currency?: string }).paired_iou_currency, "PND");
+});
+
+test("Domain hex is lower-cased before encoding", () => {
+  // XRPL expects hex of the lowercase ASCII domain; a mixed-case value would
+  // silently break the XLS-26 account <-> toml verification link.
+  const expected = "706F6E642E6578616D706C652E636F6D";
+  assert.equal(domainToHex("pond.example.com"), expected);
+  assert.equal(domainToHex("Pond.Example.COM"), expected);
+  assert.equal(domainToHex("  PoNd.ExAmPlE.cOm  "), expected);
+  assert.equal(Buffer.from(expected, "hex").toString("utf8"), "pond.example.com");
+});
+
+test("renderXrpLedgerToml lower-cases the domain it writes", () => {
+  const toml = renderXrpLedgerToml({
+    issuerAddress: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+    issuerDomain: "Pond.Example.COM",
+    network: "main",
+  });
+  assert.match(toml, /pond\.example\.com/);
+  assert.doesNotMatch(toml, /Pond\.Example\.COM/);
 });
 
 test("xrp-ledger.toml names $PND as an IOU and leaves $rPND issuance id substitutable", () => {

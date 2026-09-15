@@ -1,27 +1,44 @@
-# xrp-ledger.toml template (XLS-26 [[TOKENS]] plus core [[ACCOUNTS]] / [[CURRENCIES]]).
-# Host at https://<ISSUER_DOMAIN>/.well-known/xrp-ledger.toml
-# then set the issuing account Domain to <ISSUER_DOMAIN>.
+# xrp-ledger.toml template (XLS-26).
+#
+# Serving requirements — all of these are load-bearing for discovery:
+#   * Path is exactly https://<ISSUER_DOMAIN>/.well-known/xrp-ledger.toml, lowercase
+#   * HTTPS with a CA-signed certificate; content over plain HTTP should not be trusted
+#   * Send `Access-Control-Allow-Origin: *` for that path
+#   * Content-Type `application/toml` (consumers should also accept `text/plain`)
+#   * Set the issuing account's Domain to <ISSUER_DOMAIN> exactly, including any `www.`
+#
+# Either half alone proves nothing: anyone can host a file claiming an account, and
+# any account can set Domain to any string. Matching both is the evidence.
+#
+# XRPL Meta crawls every issuing account with a Domain set and propagates this file
+# into Xaman, Crossmark, GemWallet, XRP Toolkit and the Xaman DEX. Verify with:
+#   GET https://s1.xrplmeta.org/v2/token/PND:{{ISSUER_ADDRESS}}
 #
 # Placeholders:
-#   {{ISSUER_ADDRESS}}  classic address of the cold issuer
-#   {{ISSUER_DOMAIN}}   domain that serves this file
-#   {{NETWORK}}         main | testnet | other
+#   {{ISSUER_ADDRESS}}    classic address of the issuing account
+#   {{ISSUER_DOMAIN}}     domain that serves this file (rendered lowercase)
+#   {{NETWORK}}           main | testnet | other
 #   {{RPND_ISSUANCE_ID}}  hex MPTokenIssuanceID once $rPND exists on that network
 
-METADATA_NOTICE = "This file describes rPND tokens. Addresses are authoritative only after AccountSet Domain matches this host."
+METADATA_NOTICE = "This file describes Pond Protocol tokens. Addresses are authoritative only after AccountSet Domain matches this host."
 
 [[PRINCIPALS]]
-name = "rPND issuer"
+name = "Pond Protocol"
+# TODO(owner): real contact address before publishing.
 email = "replace-me@example.com"
 
-[[VALIDATORS]]
-
-[[SERVERS]]
+[[ISSUERS]]
+address = "{{ISSUER_ADDRESS}}"
+name = "Pond Protocol"
+desc = "Issuer of $PND."
+# TODO(owner): square icon at a stable HTTPS or ipfs:// URL. The protocol prefix is
+# required. Commented out rather than guessed — a broken icon URL is worse than none.
+# icon = "https://{{ISSUER_DOMAIN}}/pond-icon.png"
 
 [[ACCOUNTS]]
 address = "{{ISSUER_ADDRESS}}"
 network = "{{NETWORK}}"
-desc = "Cold issuing account for $PND (IOU) and $rPND (MPT)."
+desc = "Issuing account for $PND (IOU). Whether it also issues $rPND is undecided."
 
 [[CURRENCIES]]
 code = "PND"
@@ -33,11 +50,31 @@ symbol = "$"
 [[TOKENS]]
 currency = "PND"
 issuer = "{{ISSUER_ADDRESS}}"
+# TODO(owner): confirm the public display name and description.
 name = "PND"
 desc = "PND issued currency (IOU) on the XRP Ledger."
+# TODO(owner): valid classes are rwa, memes, wrapped, gaming, defi, other.
+# `memes` is a candidate if that is the intended positioning; `other` is the
+# neutral default and asserts nothing.
 asset_class = "other"
+# TODO(owner): square token icon, stable URL, protocol prefix required.
+# icon = "https://{{ISSUER_DOMAIN}}/pnd-icon.png"
+
+[[TOKENS.URLS]]
+url = "https://{{ISSUER_DOMAIN}}"
+type = "website"
+title = "Official Website"
+
+# TODO(owner): add socials once the handles are decided. `type` accepts
+# website | social | document.
+# [[TOKENS.URLS]]
+# url = "https://x.com/<handle>"
+# type = "social"
+# title = "X"
 
 # Uncomment after MPTokenIssuanceCreate succeeds and explorers accept MPT rows.
+# Note $rPND is an MPT: its authoritative metadata is the on-ledger XLS-89 blob,
+# and this stanza is only a convenience for XLS-26 consumers.
 # [[TOKENS]]
 # currency = "RPND"
 # issuer = "{{ISSUER_ADDRESS}}"

@@ -35,6 +35,16 @@ test("issuer AccountSet enables DefaultRipple and DisallowXRP for $PND", () => {
   assert.equal(tx.TransferRate, 0);
 });
 
+test("issuer AccountSet lower-cases a mixed-case Domain before hex-encoding", () => {
+  const tx = buildIssuerAccountSet({
+    issuerAddress: issuer,
+    config: loadTokenConfig(),
+    domain: "Pond.Example.COM",
+  });
+  assert.equal(tx.Domain, "706F6E642E6578616D706C652E636F6D");
+  assert.equal(Buffer.from(String(tx.Domain), "hex").toString("utf8"), "pond.example.com");
+});
+
 test("$PND TrustSet and Payment use currency PND and the cold issuer", () => {
   const config = loadTokenConfig();
   const trust = buildPndTrustSet({ holderAddress: hot, issuerAddress: issuer, config });

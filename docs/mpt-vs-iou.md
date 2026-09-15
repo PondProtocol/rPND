@@ -35,7 +35,7 @@ This is a comparison of ledger primitives. The economic relationship between the
 
 **Reach.** MPTs need the MPTokens amendment. `config/tokens.json` marks Testnet `supportsMpt: false` for exactly this reason, and `issue-rpnd` refuses to run there. Wallets, explorers, and venues support MPTs unevenly while the primitive is still rolling out, whereas trust-line IOUs work everywhere today. This is the real price of the choice.
 
-**DEX and AMM access is absent, not just a flag.** IOUs trade on the XRPL DEX by default. An MPT needs `tfMPTCanTrade`, which $rPND does not set — and the flag would not help yet, because MPT trading on the DEX and AMM is not implemented on any network. There is no native order book, no AMM pool, and therefore no on-ledger price for an MPT today.
+**DEX and AMM access is absent, not just a flag.** IOUs trade on the XRPL DEX by default. An MPT needs `tfMPTCanTrade`, which $rPND does not set — and setting it would not help yet, because MPT DEX and AMM support is gated by the **MPTokensV2** amendment (XLS-82), which is not enabled on mainnet. `OfferCreate` and `AMMCreate` return `temDISABLED` for MPTs even with the flag on. So an MPT has no native order book, no AMM pool, and no on-ledger price today, while $PND as an IOU can be traded and pooled immediately. For a market-facing asset this is currently the decisive difference.
 
 **Holders must authorize.** An `MPTokenAuthorize` is required before receiving $rPND, even with `requireAuth` off. Comparable to a `TrustSet` in effort, but it is a step that integrators must implement rather than assume.
 

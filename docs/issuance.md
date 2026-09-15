@@ -15,6 +15,7 @@ This is not hypothetical. The $rPND create this repo builds from the committed c
 | `TokenEscrow` | enabled | MPT escrow — the only working lockup primitive |
 | `Clawback` | enabled | IOU clawback, opt-in per issuer account |
 | `DynamicMPT` | **not enabled** | `ImmutableFlags`; changing metadata, transfer fee, or flags after create |
+| `MPTokensV2` | **not enabled** | MPT DEX and AMM support. Until it activates, $rPND cannot trade anywhere; $PND as an IOU can. |
 
 Amendment status is a point-in-time observation. Re-check it against the live ledger before any mainnet operation. `config/tokens.json` tracks only `supportsMpt` per network, which is necessary but not sufficient — it does not model `DynamicMPT`.
 
@@ -33,7 +34,12 @@ This tooling assumes a **single** cold account issues both assets: `ISSUER_SEED`
 
 The owner has designated `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` as the **$PND issuer**. It is **not** assigned as the $rPND issuer, and `rpnd-spec.md` deliberately still lists the $rPND issuer as TODO.
 
-Verified at time of writing: the address has a valid checksum but `account_info` returns `actNotFound` on mainnet, testnet, and devnet. The account does not exist yet, holds no XRP, and has no trust lines or other owner-directory objects. Everything in [Decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) is therefore still open.
+Verified on mainnet at time of writing: the account is **funded but entirely unconfigured** — 2.539034 XRP, `Flags` `0`, `OwnerCount` `0`, no `Domain`, no `RegularKey`. Two consequences:
+
+- `OwnerCount` is `0`, so the owner directory is empty and everything in [Decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) is still open.
+- `Flags` is `0`, so **`asfDefaultRipple` is not set.** `configure-issuer` sets it from `pnd.defaultRipple`, and it has not been run. Beyond letting balances move between holders, `asfDefaultRipple` is a hard prerequisite for an AMM: `AMMCreate` fails with `terNO_RIPPLE` without it.
+
+The account also has no `Domain` yet, so the XLS-26 two-way link described under [Metadata publication](#metadata-publication) does not exist.
 
 If one account issues both, the two assets are coupled in ways that cannot be undone selectively:
 
@@ -106,7 +112,24 @@ $rPND issuance is not on the $PND launch path; none of this blocks $PND.
 2. Serve the file at `https://<host>/.well-known/xrp-ledger.toml`
 3. Re-run `configure-issuer --domain <host>` so the AccountRoot `Domain` matches
 
-Explorers that implement XLS-26 will scrape that file. $rPND discovery also depends on the on-ledger XLS-89 blob.
+This is the highest-leverage discovery step available, because it is crawled rather than applied for. XRPL Meta scans every issuing account that has a `Domain` set, fetches and parses its `xrp-ledger.toml`, and serves the result to Xaman, Crossmark, GemWallet, XRP Toolkit and the Xaman DEX. One file plus one `AccountSet` propagates the name, icon, description, asset class and links across all of them, with no per-wallet outreach.
+
+Requirements that are easy to get wrong, and that fail silently:
+
+- Path is exactly `/.well-known/xrp-ledger.toml`, lowercase, over **HTTPS** with a CA-signed certificate.
+- Serve `Access-Control-Allow-Origin: *` for that path, with Content-Type `application/toml`.
+- The issuer's `Domain` must match the serving host **exactly**, including any `www.`, and is stored on ledger as hex of the **lowercase** ASCII. `domainToHex` in `src/metadata.ts` lower-cases before encoding for exactly this reason, and `render-toml` lower-cases the domain it writes.
+- `icon` values must carry a protocol prefix (`https://` or `ipfs://`).
+
+Neither half of the link proves anything alone — anyone can host a file claiming an account, and any account can set `Domain` to any string. It is the match that is evidence.
+
+Verify the result before relying on it:
+
+```
+GET https://s1.xrplmeta.org/v2/token/PND:<issuer-address>
+```
+
+$rPND discovery is different: an MPT's authoritative metadata is the on-ledger XLS-89 blob, so the TOML stanza for it is only a convenience for XLS-26 consumers.
 
 ## Mainnet
 

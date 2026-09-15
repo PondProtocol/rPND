@@ -60,7 +60,7 @@ Capabilities are declared once in `config/tokens.json` and mapped to real XRPL f
 | --- | --- | --- | --- |
 | `canTransfer` | `tfMPTCanTransfer` | on | Holders may transfer to each other, not only back to the issuer |
 | `canLock` | `tfMPTCanLock` | on | Issuer may lock balances via `MPTokenIssuanceSet` |
-| `canTrade` | `tfMPTCanTrade` | off | Would permit DEX / AMM use — but MPT DEX and AMM trading is not implemented on any network yet |
+| `canTrade` | `tfMPTCanTrade` | off | Declares intent to allow DEX / AMM use, but MPT trading needs the MPTokensV2 amendment, which mainnet does not have |
 | `requireAuth` | `tfMPTRequireAuth` | off | Issuer must approve each holder |
 | `canClawback` | `tfMPTCanClawback` | off | Issuer may claw back balances |
 
@@ -157,7 +157,7 @@ Local faucet output is written to `var/` (gitignored). Treat seeds as secrets.
 
 ## Networks
 
-$rPND needs `MPTokensV1`, which is live on mainnet and Testnet. Setting `ImmutableFlags` additionally needs **DynamicMPT**, which is **not** live on mainnet. Mainnet issuance is a separate, reviewed operation — this repo does not faucet-fund mainnet accounts, and amendment status must be re-confirmed against the live ledger before any create.
+$rPND needs `MPTokensV1`, which is live on mainnet and Testnet. Two further amendments are **not** live on mainnet: **DynamicMPT** (XLS-94), needed for `ImmutableFlags` and for changing metadata, transfer fee, or flags after create; and **MPTokensV2** (XLS-82), needed for MPT DEX and AMM support. Mainnet issuance is a separate, reviewed operation — this repo does not faucet-fund mainnet accounts, and amendment status must be re-confirmed against the live ledger before any create.
 
 **Rehearse on Testnet, not Devnet.** Testnet mirrors mainnet's amendment set (`MPTokensV1` on, `DynamicMPT` off). Devnet has `DynamicMPT` on, so it accepts transactions mainnet rejects — which is exactly how the blocker below would reach launch day unnoticed.
 

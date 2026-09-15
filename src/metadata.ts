@@ -32,8 +32,17 @@ export function encodeRpndMetadata(config: TokenConfig = loadTokenConfig()): str
   return hex;
 }
 
+/**
+ * XRPL expects `Domain` as the hex of the *lowercase* ASCII domain, and XLS-26
+ * account verification requires it to match the serving host exactly. A
+ * mixed-case value encodes without error but silently breaks that link.
+ */
 export function domainToHex(domain: string): string {
-  return Buffer.from(domain.trim(), "utf8").toString("hex").toUpperCase();
+  return Buffer.from(normalizeDomain(domain), "utf8").toString("hex").toUpperCase();
+}
+
+export function normalizeDomain(domain: string): string {
+  return domain.trim().toLowerCase();
 }
 
 export function renderXrpLedgerToml(params: {
@@ -47,7 +56,7 @@ export function renderXrpLedgerToml(params: {
   const template = params.template ?? readFileSync(tomlTemplatePath(), "utf8");
   return template
     .replaceAll("{{ISSUER_ADDRESS}}", params.issuerAddress)
-    .replaceAll("{{ISSUER_DOMAIN}}", params.issuerDomain)
+    .replaceAll("{{ISSUER_DOMAIN}}", normalizeDomain(params.issuerDomain))
     .replaceAll("{{NETWORK}}", tomlNetwork)
     .replaceAll("{{RPND_ISSUANCE_ID}}", params.rpndIssuanceId ?? "");
 }

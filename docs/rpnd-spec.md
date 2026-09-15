@@ -108,7 +108,7 @@ Set from `rpnd.flags` by `mptCreateFlags()`.
 | --- | --- | --- | --- | --- |
 | `canTransfer` | `tfMPTCanTransfer` | 32 | **on** | Holders may transfer to third parties. Without it, holders can only send back to the issuer. |
 | `canLock` | `tfMPTCanLock` | 2 | **on** | Issuer may lock the issuance or an individual holder's balance. |
-| `canTrade` | `tfMPTCanTrade` | 16 | off | Would permit DEX / AMM use. MPT trading on the DEX and AMM is **not implemented on any network yet**, so the flag currently grants nothing. |
+| `canTrade` | `tfMPTCanTrade` | 16 | off | Declares intent to allow DEX / AMM use. MPT DEX and AMM support is gated by the **MPTokensV2** amendment (XLS-82), which is **not enabled on mainnet**, so the flag grants nothing today — `OfferCreate` and `AMMCreate` return `temDISABLED` for MPTs even with it set. |
 | `requireAuth` | `tfMPTRequireAuth` | 4 | off | Issuer must authorize each holder individually. |
 | `canClawback` | `tfMPTCanClawback` | 64 | off | Issuer may claw back holder balances. |
 
