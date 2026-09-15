@@ -57,6 +57,8 @@ Every `value` in an MPT `Payment` is a base-unit string. `rpndAmount()` builds `
 
 `MaximumAmount` is enforced by the ledger: once outstanding supply reaches it, further mints fail. Because it cannot be raised later, it is the one parameter that must be right before the create transaction.
 
+It caps `OutstandingAmount` — the amount **currently in circulation** — and not cumulative lifetime issuance. Any holder paying $rPND to the issuer burns it and decreases `OutstandingAmount`, which frees headroom the issuer can mint into again. A fixed `MaximumAmount` is therefore a ceiling on circulating supply, not a limit on how much is ever emitted. The issuer account also cannot hold its own MPT: conceptually it holds `MaximumAmount − OutstandingAmount`, which is why distributable inventory lives on the operational account. [`tokenomics.md`](tokenomics.md#3-supply-and-emission) works through what that means for emission.
+
 TODO (owner): confirm final `assetScale`, `maximumAmount`, and `initialIssuance`. Changing any of the first two after issuance requires destroying and re-creating the issuance, which changes the `MPTokenIssuanceID`.
 
 ## Metadata schema (XLS-89)
@@ -113,11 +115,21 @@ Not exposed in config and therefore unset: `tfMPTCanEscrow` (8), `tfMPTCanHoldCo
 
 The effect is a permanent guarantee: clawback is off at create, and because the setting is frozen the issuer cannot enable it later with `MPTokenIssuanceSet`. **No holder of $rPND can have their balance confiscated by the issuer.**
 
-Every other flag stays mutable. `MPTokenIssuanceSet` accepts `tfMPTSetCanLock`, `tfMPTSetRequireAuth`, `tfMPTSetCanEscrow`, `tfMPTSetCanTrade`, `tfMPTSetCanTransfer`, and `tfMPTSetCanClawback` (the last is inert here, being frozen), so the issuer retains discretion over the rest.
+**Capability flags are one-way.** This is easy to misread. `MPTokenIssuanceSet` can *enable* a capability flag (`tfMPTSetCanLock`, `tfMPTSetRequireAuth`, `tfMPTSetCanEscrow`, `tfMPTSetCanTrade`, `tfMPTSetCanTransfer`, `tfMPTSetCanClawback`), but there is no operation that disables one. Once on, a capability stays on. The practical consequences for $rPND:
 
-`xrpl@5` also defines `tifMPTMetadata` (65536) and `tifMPTTransferFee` (131072), which would freeze the metadata blob and the transfer fee. Neither is set. In this version `ImmutableFlags` is also accepted on `MPTokenIssuanceSet`, so hardening after create appears possible.
+| Flag | State | What remains possible |
+| --- | --- | --- |
+| `canTransfer`, `canLock` | on at create | Permanent. Cannot be revoked. |
+| `canTrade`, `requireAuth`, `canEscrow` | off | May be enabled later, then never revoked. |
+| `canClawback` | off and frozen | Unreachable forever. |
 
-TODO (owner): two decisions. Should any of `canTransfer`, `canLock`, `canTrade`, or `requireAuth` be frozen at create so holders get the same permanence they get on clawback? Should metadata be frozen with `tifMPTMetadata` once production URLs are final? Also verify against the target rippled release whether `ImmutableFlags` on `MPTokenIssuanceSet` is honoured, rather than relying on the client library's type surface.
+So `tifMPTCanClawback` is doing real work: without it the issuer could enable clawback at any later point via `tfMPTSetCanClawback`. It is the freeze, not the initial off state, that makes the guarantee permanent.
+
+`tifMPTMetadata` (65536) and `tifMPTTransferFee` (131072) would freeze the metadata blob and the transfer fee. Neither is set, so both stay mutable. `ImmutableFlags` is also accepted on `MPTokenIssuanceSet`, so a flag that is currently off can be frozen off later — but only while it is still off.
+
+Mutating `ImmutableFlags`, `MPTokenMetadata`, or `TransferFee` requires the **DynamicMPT** amendment, as does setting `ImmutableFlags` at create. Since this repo's create transaction sets it, the create depends on DynamicMPT and not on MPTokensV1 alone; without it the transaction fails with `temDISABLED`.
+
+TODO (owner): should any of `canTrade`, `requireAuth`, or `canEscrow` be frozen off so holders get the same permanence they get on clawback? Should metadata be frozen with `tifMPTMetadata` once production URLs are final? Both are decided per flag in [`tokenomics.md`](tokenomics.md#6-decisions-for-the-owner).
 
 ## Lifecycle
 
@@ -156,7 +168,9 @@ TODO (owner): define whether a conversion or redemption relationship exists, in 
 | --- | --- |
 | `AssetScale`, `MaximumAmount` | Impossible after create. New issuance, new id. |
 | Metadata | `MPTokenIssuanceSet` replaces the whole blob. Update `config/tokens.json` in the same change so the repo stays the source of truth. |
-| Mutable flags | `MPTokenIssuanceSet`. Record the reason in the PR. |
+| Enabling an off capability flag | `MPTokenIssuanceSet`. One-way — record the reason in the PR, because it cannot be undone. |
+| Disabling an on capability flag | Impossible. |
 | Frozen flags | Impossible. |
+| `TransferFee` | `MPTokenIssuanceSet`, unless frozen. Requires `canTransfer`, which is on. |
 
 Any edit to `config/tokens.json` is a change to the token. See [CONTRIBUTING.md](../CONTRIBUTING.md).
