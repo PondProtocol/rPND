@@ -23,7 +23,7 @@ IOU amounts use `{ currency, issuer, value }`. The issuer classic address is par
 - **On-ledger id:** `MPTokenIssuanceID` returned by `MPTokenIssuanceCreate`
 - **Metadata:** XLS-89 JSON, hex-encoded into `MPTokenMetadata` (1024-byte cap)
 - **Holders:** must submit `MPTokenAuthorize` before they can receive the MPT
-- **Defaults:** transferable, lockable, clawback permanently disabled via `ImmutableFlags`
+- **Defaults:** transferable, lockable, clawback off with `ImmutableFlags` requesting a permanent freeze. Nothing is issued yet, so none of this is settled — and the freeze needs the DynamicMPT amendment, which mainnet does not have, so the create as configured fails there. See [`rpnd-spec.md`](rpnd-spec.md)
 
 MPT payments use `{ mpt_issuance_id, value }`. Scale is `assetScale` (6 in the default config), so `value` is in fractional units.
 
