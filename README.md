@@ -3,7 +3,9 @@
 [![CI](https://github.com/pondprotocol/rpnd/actions/workflows/ci.yml/badge.svg)](https://github.com/pondprotocol/rpnd/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**$rPND is the Multi-Purpose Token (MPT) of Pond Protocol on the XRP Ledger.**
+**$rPND is the reward token of Pond Protocol — a Multi-Purpose Token (MPT) on the XRP Ledger.**
+
+It is an MPT rather than an IOU because rewards need things an IOU cannot do: a ledger-enforced supply ceiling, issuer-controlled on-ledger metadata, and per-issuance capability flags. Emission and reward mechanics are still being decided; [`docs/tokenomics.md`](docs/tokenomics.md) frames those choices.
 
 This repository is the **operator source of truth** for Pond Protocol's on-ledger token configuration and issuance tooling: $rPND's parameters, its XLS-89 metadata, and the scripts that configure an issuer and create the issuance. It also carries the issuance path for the sibling IOU, **$PND**, because both assets come from the same issuing account.
 
@@ -60,7 +62,9 @@ Capabilities are declared once in `config/tokens.json` and mapped to real XRPL f
 
 `tfMPTCanEscrow` and `tfMPTCanHoldConfidentialBalance` are not set.
 
-**Immutability.** `config/tokens.json` sets `immutable.canClawback`, which puts `tifMPTCanClawback` in `ImmutableFlags` on the create transaction. Clawback is therefore off *and* frozen: the issuer cannot grant itself clawback later. Every other flag above remains changeable by the issuer through `MPTokenIssuanceSet` unless it is frozen too. Which further flags should be frozen at create is an open decision — see [Open questions](#open-questions).
+**Immutability.** `config/tokens.json` sets `immutable.canClawback`, which puts `tifMPTCanClawback` in `ImmutableFlags` on the create transaction. Clawback is therefore off *and* frozen: the issuer cannot grant itself clawback later.
+
+Capability flags are **one-way**. `MPTokenIssuanceSet` can enable a flag but nothing can disable one, so `canTransfer` and `canLock` are already permanent, while `canTrade` and `requireAuth` could be enabled later and then never revoked. Freezing an off flag is the only way to promise it stays off. Which further flags to freeze is an open decision — see [Open questions](#open-questions).
 
 `AssetScale` and `MaximumAmount` are fixed for the life of the issuance and cannot be changed by any later transaction. Review them before submitting the create.
 
@@ -70,6 +74,8 @@ Capabilities are declared once in `config/tokens.json` and mapped to real XRPL f
 > The values in `config/tokens.json` are **working defaults for devnet, not ratified token economics.** Do not quote them as $rPND's supply.
 
 `assetScale` is `6`, so one display unit is 1,000,000 base units and all `value` fields in payments are in base units. `maximumAmount` is `1000000000000000` base units, which is 1,000,000,000 display units; the ledger's own ceiling is 2^63−1 base units. Final supply, initial mint, and scale are TODO for the owner.
+
+`maximumAmount` caps supply **in circulation**, not cumulative issuance: paying $rPND to the issuer burns it and frees headroom to mint again. [`docs/tokenomics.md`](docs/tokenomics.md) works through what that implies for a reward token.
 
 ## Pond Protocol repos
 
@@ -82,7 +88,7 @@ Capabilities are declared once in `config/tokens.json` and mapped to real XRPL f
 
 The split between this repo and `pnd` is deliberate: `pnd` explains $PND to holders, wallets, and indexers, while the parameters both tokens are issued with live here in `config/tokens.json`. $PND's issuance path is in this repo because the issuing account is shared with $rPND. On any disagreement between a doc there and the config here, this repo wins.
 
-TODO (owner): what role $rPND plays in the Protocol — utility, fees, governance, or something else — is not defined in `protocol` yet, so this README does not guess.
+$rPND is the Protocol's reward token. TODO (owner): what specifically earns it depends on what the Protocol does, which `protocol` does not define yet, so this README does not guess.
 
 ### Relationship to $PND
 
@@ -135,6 +141,7 @@ npx tsx src/cli.ts status
 | Doc | Covers |
 | --- | --- |
 | [`docs/rpnd-spec.md`](docs/rpnd-spec.md) | $rPND token spec: fields, flags, metadata schema, amounts, lifecycle, invariants |
+| [`docs/tokenomics.md`](docs/tokenomics.md) | **Decision draft** — reward-token supply, emission, sinks, and the decisions blocking issuance |
 | [`docs/mpt-vs-iou.md`](docs/mpt-vs-iou.md) | Why $rPND is an MPT, in detail, and what it costs |
 | [`docs/tokens.md`](docs/tokens.md) | Token identity for both assets |
 | [`docs/issuance.md`](docs/issuance.md) | Issuance procedure and network notes |
@@ -159,10 +166,13 @@ Tracked for the owner; none of these are decided:
 - Public domain for `ISSUER_DOMAIN` and XLS-26 hosting; production icon and URI values
 - Whether the on-ledger `issuer_name` in `config/tokens.json` should become `Pond Protocol` — it is currently `rPND`, and the change alters the XLS-89 blob, so it is an issuance decision rather than a docs edit
 - Legal issuer entity and key custody policy
-- $PND ↔ $rPND conversion policy, if any
-- $rPND's role in Pond Protocol
+- $PND ↔ $rPND conversion policy, if any, and which token is primary user-facing
+- What specifically earns $rPND, the emission shape, and which sink is load-bearing
+- Whether reward clawback is wanted — currently foreclosed permanently by `immutable.canClawback`
 - Whether flags beyond clawback should be frozen at create, and whether metadata should be frozen with `tifMPTMetadata`
-- Mainnet MPTokens amendment status at issuance time
+- Mainnet amendment status at issuance time, including **DynamicMPT**, which the current create depends on because it sets `ImmutableFlags`
+
+The supply, emission, and reward decisions are worked through in [`docs/tokenomics.md`](docs/tokenomics.md), which separates what must be decided before issuance from what can be deferred.
 
 No security review or audit of this repository has been performed or commissioned.
 
