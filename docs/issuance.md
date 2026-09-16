@@ -63,12 +63,39 @@ Holders who are not the operational account must send their own `TrustSet` befor
 | --- | --- | --- |
 | `asfAllowTrustLineClawback` (16) | Only settable while the owner directory is empty — no trust lines, offers, escrows, payment channels, checks, or signer lists. Cannot be reverted once set. Requires the Clawback amendment. | $PND can **never** be clawed back. Permanent. |
 | `asfRequireAuth` (2) | Only settable while the account has no trust lines. | $PND can never be made allow-list only. |
-| `asfNoFreeze` (6) | Can never be disabled once enabled. Must be signed with the master key pair. | Retaining freeze power is the default; giving it up stays available later, but only in one direction. |
-| `asfAllowTrustLineLocking` (17) | Cannot be disabled once enabled. Requires the TokenEscrow amendment. | $PND cannot be placed in escrow. |
+| `asfNoFreeze` (6) | Can never be disabled once enabled. Must be signed with the master key pair. Permanently mutually exclusive with `asfAllowTrustLineClawback` — enabling either forecloses the other with `tecNO_PERMISSION`. | Retaining freeze power is the default; giving it up stays available later, but only in one direction. |
+| `asfAllowTrustLineLocking` (17) | **Reversible**, and has no deadline — see the correction below. Requires the TokenEscrow amendment. | $PND cannot be placed in escrow until this is set. |
 
 Because the designated $PND issuer does not exist on any network yet, all four are still open. The window for the first two closes the moment step 2 runs.
 
-TODO (owner): decide clawback and allow-listing for $PND **before** the first `TrustSet` on mainnet. Clawback in particular is the mirror image of the $rPND decision — for the MPT it is set at issuance create, for the IOU it is set before the first trust line, and in both cases it is one-way. `configure-issuer` would need a flag to support any of these; none is implemented today.
+> [!NOTE]
+> **Correction:** an earlier version of this table said `asfAllowTrustLineLocking` "cannot be disabled once enabled," inherited from xrpl.org's own `AccountSet` reference page. That statement is wrong. Verified directly on Testnet: `ClearFlag: 17` returns `tesSUCCESS`, including on an issuer with live trust lines and live escrows outstanding. Unlike clawback and `asfRequireAuth`, this flag has no owner-directory deadline either — it can be set after the first trust line, and after escrows already exist. It is not a now-or-never decision. (Clearing it is not a kill switch, though: it only blocks *new* escrows of this currency, and has no effect on ones that already exist.)
+
+`issuer-flag` and `issuer-flag-sequence` (below) build the `AccountSet` for any of these four flags, plus `asfDefaultRipple`; none of them was expressible before.
+
+TODO (owner): decide clawback and allow-listing for $PND **before** the first `TrustSet` on mainnet. Clawback in particular is the mirror image of the $rPND decision — for the MPT it is set at issuance create, for the IOU it is set before the first trust line, and in both cases it is one-way.
+
+## Issuer flags: `issuer-flag` and `issuer-flag-sequence`
+
+`buildIssuerAccountSet` in `src/issuance.ts` used to hard-assign `SetFlag: asfDefaultRipple` with no parameter — since `SetFlag` carries exactly one value per transaction, it could never express clawback, `asfRequireAuth`, `asfNoFreeze`, or the escrow-locking flag. It now accepts an optional `flag` override, and `buildIssuerFlagAccountSet` builds a clean, standalone `AccountSet` for any one of them:
+
+```bash
+# A single standalone AccountSet for one flag.
+npx tsx src/cli.ts issuer-flag --flag allow-trust-line-locking
+npx tsx src/cli.ts issuer-flag --flag allow-trust-line-clawback
+npx tsx src/cli.ts issuer-flag --flag no-freeze
+npx tsx src/cli.ts issuer-flag --flag require-auth
+npx tsx src/cli.ts issuer-flag --flag allow-trust-line-locking --mode clear
+
+# The full ordered batch for a chosen configuration — clawback and
+# RequireAuth first (both close at the first trust line), then the main
+# configure-issuer transaction, then NoFreeze, then trust-line locking.
+npx tsx src/cli.ts issuer-flag-sequence --clawback --no-freeze --allow-trust-line-locking
+```
+
+Before submitting `allowTrustLineClawback` or `noFreeze`, both commands re-check the *live* ledger: the owner directory via `account_objects` — never `OwnerCount`, which stays `0` even once a holder's trust line (or an escrow of this issuer's currency) has already closed the clawback window — and the opposing flag's live state, for either. A configuration that requests both `--clawback` and `--no-freeze` is refused before any network call, since the two are permanently mutually exclusive.
+
+Every `issuer-flag*` command accepts `--prepare`: it connects, autofills `Account`/`Sequence`/`Fee`/`LastLedgerSequence` from live network state, and prints the still-unsigned transaction (or, for `issuer-flag-sequence`, the whole batch with consecutive `Sequence` numbers) for an offline signer. No seed is read in that mode. On mainnet, no seed is ever read for any command — see [Mainnet](#mainnet).
 
 ### Trust limit and distribution topology
 
@@ -100,6 +127,41 @@ Requires an MPT-capable network. `MPTokensV1` is live on mainnet, Testnet, and D
 
 $rPND issuance is not on the $PND launch path; none of this blocks $PND.
 
+## Escrow (vesting)
+
+For an issued currency (an IOU like $PND) to be escrowable at all, its issuer needs `asfAllowTrustLineLocking` set — see [Issuer flags](#issuer-flags-issuer-flag-and-issuer-flag-sequence). Without it, every `EscrowCreate` of that currency fails `tecNO_PERMISSION`. `escrow-create`/`escrow-finish`/`escrow-cancel`/`escrow-schedule` all check this live precondition (and that `TransferRate` reads `0` — it is snapshotted into the escrow at creation and corrupts amounts otherwise) before building or submitting anything.
+
+**The issuer can never escrow its own currency** — `tecNO_PERMISSION`, verified, even with the locking flag set. A separate account (a "treasury") has to hold and escrow the currency. `buildEscrowCreate` refuses client-side to build a transaction where `Account` is also the amount's `issuer`, to save a wasted fee on a transaction that would fail anyway.
+
+```bash
+# One escrow, for an issued currency, defaulting to a self-escrow
+# (Destination = the sending account) — the shape that makes permissionless
+# release harmless, since the funds just become spendable by the sender again.
+npx tsx src/cli.ts escrow-create --issuer <coldIssuer> --value 9000000000 --finish-after 2027-01-01T00:00:00Z
+npx tsx src/cli.ts escrow-create --issuer <coldIssuer> --value 100 --to <otherAccount> --finish-after 2027-06-01T00:00:00Z --cancel-after 2027-07-01T00:00:00Z
+
+# Anyone may finish or cancel once due — releases are permissionless.
+npx tsx src/cli.ts escrow-finish --owner <treasury> --offer-sequence 12345
+npx tsx src/cli.ts escrow-cancel --owner <treasury> --offer-sequence 12345
+
+# The dated-tranche vesting schedule: ten 9B-PND tranches, monthly from
+# 2027-01-01, FinishAfter only, self-escrowed by default. Every number is
+# an override, not a decision this tooling makes for you.
+npx tsx src/cli.ts escrow-schedule --issuer <coldIssuer>
+npx tsx src/cli.ts escrow-schedule --issuer <coldIssuer> --count 1 --tranche-value 5000000000 --start 2028-03-01T00:00:00Z # a later top-up
+
+# Live escrows for an account, plus the corrected supply figure.
+npx tsx src/cli.ts escrow-status --owner <treasury> --issuer <coldIssuer>
+```
+
+**A top-up is not a special operation.** Once a tranche is finished, there is no way to reopen it or claw tokens back into it — the only way to "move tokens back into escrow" is a fresh `EscrowCreate`, and a new escrow never resizes or merges with an existing one. `escrow-create` (or `escrow-schedule --count 1`) *is* the top-up mechanism: run it again with a new date and amount.
+
+**Sequence capture.** Each `EscrowCreate`'s `Sequence` becomes the `OfferSequence` an `EscrowFinish`/`EscrowCancel` needs, possibly months later. `escrow-create` and `escrow-schedule` record it in `var/<network>-issuance.json` the moment the create succeeds. If that file is ever lost, `escrow-status` (via `listEscrows` in `src/escrow.ts`) rebuilds the list from `account_objects` on the owner — every live `Escrow` object is still there until it resolves.
+
+**Supply reporting.** `gateway_balances` `obligations` excludes escrowed amounts entirely — verified: with some issued supply escrowed, `obligations` reports only what is unescrowed. The true issued supply is `obligations + sum of escrowed amounts`, and `escrow-status --issuer <coldIssuer>` computes exactly that by scanning the *issuer's* `account_objects` for `Escrow` entries in its currency (escrows link into the issuer's owner directory regardless of who created them, and cost the issuer no reserve).
+
+Every escrow command accepts `--prepare` — same as `issuer-flag` above, no seed, ever, and none for mainnet under any circumstances.
+
 ## Metadata publication
 
 1. `npx tsx src/cli.ts render-toml --issuer <cold-address> --domain <host>`
@@ -112,4 +174,6 @@ Explorers that implement XLS-26 will scrape that file. $rPND discovery also depe
 
 There is no faucet command on mainnet. Fund accounts independently, re-confirm amendment status against the live ledger, replace placeholder icon/URI/domain values, then submit the same transaction sequence with production seeds held outside this repo.
 
-For $PND specifically, settle [the decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) and the [distribution topology](#trust-limit-and-distribution-topology) before step 2 of the $PND sequence. For $rPND, resolve the `ImmutableFlags` / `DynamicMPT` position first, since the create cannot succeed on mainnet as configured.
+**No command in this toolkit will build a mainnet signing wallet from a seed, ever — not from an env var, not from a `--*-seed` flag.** `walletFromSeed`/`optionalWallet` in `src/runtime.ts` refuse outright when the resolved network is `mainnet`. The only way to get a mainnet transaction out of this repo is `--prepare`: every signing command accepts it, connects, autofills `Account`/`Sequence`/`Fee`/`LastLedgerSequence` from live network state (`client.autofill`, which needs no wallet), and prints the still-unsigned transaction for an offline signer. Sign it there; this repo never sees the seed.
+
+For $PND specifically, settle [the decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) and the [distribution topology](#trust-limit-and-distribution-topology) before step 2 of the $PND sequence. For $rPND, resolve the `ImmutableFlags` / `DynamicMPT` position first, since the create cannot succeed on mainnet as configured. For escrow, see [Escrow (vesting)](#escrow-vesting).

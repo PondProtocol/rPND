@@ -8,13 +8,17 @@ import {
 } from "xrpl";
 import { loadTokenConfig } from "../src/config.ts";
 import {
+  assertFlagPlanNotContradictory,
   buildIssuerAccountSet,
+  buildIssuerConfigurationSequence,
+  buildIssuerFlagAccountSet,
   buildPndPayment,
   buildPndTrustSet,
   buildRpndAuthorize,
   buildRpndIssuanceCreate,
   buildRpndPayment,
   extractMptIssuanceId,
+  isIssuerFlagName,
   mptCreateFlags,
 } from "../src/issuance.ts";
 
@@ -122,4 +126,91 @@ test("mptCreateFlags follows config booleans", () => {
   config.rpnd.flags.canTrade = true;
   const flags = mptCreateFlags(config);
   assert.equal((flags & MPTokenIssuanceCreateFlags.tfMPTCanTrade) !== 0, true);
+});
+
+test("buildIssuerAccountSet still defaults to asfDefaultRipple when flag is not passed", () => {
+  const tx = buildIssuerAccountSet({ issuerAddress: issuer, config: loadTokenConfig() });
+  assert.equal(tx.SetFlag, AccountSetAsfFlags.asfDefaultRipple);
+});
+
+test("buildIssuerAccountSet honours an explicit flag override, and null omits any flag", () => {
+  const config = loadTokenConfig();
+  const overridden = buildIssuerAccountSet({ issuerAddress: issuer, config, flag: "allowTrustLineLocking" });
+  assert.equal(overridden.SetFlag, AccountSetAsfFlags.asfAllowTrustLineLocking);
+
+  const omitted = buildIssuerAccountSet({ issuerAddress: issuer, config, flag: null });
+  assert.equal(omitted.SetFlag, undefined);
+});
+
+test("buildIssuerFlagAccountSet builds a standalone AccountSet for each launch-critical flag", () => {
+  const clawback = buildIssuerFlagAccountSet({ issuerAddress: issuer, flag: "allowTrustLineClawback" });
+  assert.equal(clawback.TransactionType, "AccountSet");
+  assert.equal(clawback.Account, issuer);
+  assert.equal(clawback.SetFlag, AccountSetAsfFlags.asfAllowTrustLineClawback);
+  assert.equal(clawback.TransferRate, undefined, "flag-only AccountSet carries no other fields");
+  assert.equal(clawback.TickSize, undefined);
+  assert.equal(clawback.Domain, undefined);
+
+  const noFreeze = buildIssuerFlagAccountSet({ issuerAddress: issuer, flag: "noFreeze" });
+  assert.equal(noFreeze.SetFlag, AccountSetAsfFlags.asfNoFreeze);
+
+  const requireAuth = buildIssuerFlagAccountSet({ issuerAddress: issuer, flag: "requireAuth" });
+  assert.equal(requireAuth.SetFlag, AccountSetAsfFlags.asfRequireAuth);
+
+  const locking = buildIssuerFlagAccountSet({ issuerAddress: issuer, flag: "allowTrustLineLocking" });
+  assert.equal(locking.SetFlag, AccountSetAsfFlags.asfAllowTrustLineLocking);
+
+  const cleared = buildIssuerFlagAccountSet({ issuerAddress: issuer, flag: "allowTrustLineLocking", mode: "clear" });
+  assert.equal(cleared.ClearFlag, AccountSetAsfFlags.asfAllowTrustLineLocking);
+  assert.equal(cleared.SetFlag, undefined);
+});
+
+test("isIssuerFlagName validates flag names from CLI input", () => {
+  assert.equal(isIssuerFlagName("allowTrustLineLocking"), true);
+  assert.equal(isIssuerFlagName("notAFlag"), false);
+});
+
+test("assertFlagPlanNotContradictory refuses clawback + noFreeze together, allows either alone", () => {
+  assert.throws(
+    () => assertFlagPlanNotContradictory({ clawback: true, noFreeze: true }),
+    /mutually exclusive/,
+  );
+  assert.doesNotThrow(() => assertFlagPlanNotContradictory({ clawback: true }));
+  assert.doesNotThrow(() => assertFlagPlanNotContradictory({ noFreeze: true }));
+  assert.doesNotThrow(() => assertFlagPlanNotContradictory({}));
+});
+
+test("buildIssuerConfigurationSequence orders now-or-never flags before the main AccountSet, then NoFreeze, then locking", () => {
+  const config = loadTokenConfig();
+  const txs = buildIssuerConfigurationSequence({
+    issuerAddress: issuer,
+    config,
+    domain: "example.com",
+    plan: { clawback: true, requireAuth: true, noFreeze: false, allowTrustLineLocking: true },
+  });
+
+  assert.equal(txs.length, 4);
+  assert.equal(txs[0]?.SetFlag, AccountSetAsfFlags.asfAllowTrustLineClawback);
+  assert.equal(txs[1]?.SetFlag, AccountSetAsfFlags.asfRequireAuth);
+  assert.equal(txs[2]?.SetFlag, AccountSetAsfFlags.asfDefaultRipple);
+  assert.equal(txs[2]?.Domain, Buffer.from("example.com", "utf8").toString("hex").toUpperCase());
+  assert.equal(txs[3]?.SetFlag, AccountSetAsfFlags.asfAllowTrustLineLocking);
+});
+
+test("buildIssuerConfigurationSequence with an empty plan is just the one main AccountSet", () => {
+  const txs = buildIssuerConfigurationSequence({ issuerAddress: issuer, config: loadTokenConfig(), plan: {} });
+  assert.equal(txs.length, 1);
+  assert.equal(txs[0]?.SetFlag, AccountSetAsfFlags.asfDefaultRipple);
+});
+
+test("buildIssuerConfigurationSequence refuses a plan requesting both clawback and noFreeze", () => {
+  assert.throws(
+    () =>
+      buildIssuerConfigurationSequence({
+        issuerAddress: issuer,
+        config: loadTokenConfig(),
+        plan: { clawback: true, noFreeze: true },
+      }),
+    /mutually exclusive/,
+  );
 });

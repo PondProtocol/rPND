@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { IssuanceState, NetworkName } from "./types.ts";
+import type { EscrowRecord, IssuanceState, NetworkName } from "./types.ts";
 
 const varDir = join(dirname(fileURLToPath(import.meta.url)), "..", "var");
 
@@ -27,4 +27,38 @@ export function mergeState(network: NetworkName, patch: Partial<IssuanceState>):
   const next = { ...loadState(network), ...patch, network };
   saveState(next);
   return next;
+}
+
+/**
+ * Append a newly-created escrow's record — most importantly its
+ * `Sequence`, needed as the `OfferSequence` for the `EscrowFinish` that
+ * releases it, possibly months later. Idempotent on `(owner, offerSequence)`
+ * so re-running a script that reports an already-recorded escrow does not
+ * duplicate it.
+ */
+export function recordEscrow(network: NetworkName, record: EscrowRecord): IssuanceState {
+  const state = loadState(network);
+  const existing = state.escrows ?? [];
+  const withoutDuplicate = existing.filter(
+    (entry) => !(entry.owner === record.owner && entry.offerSequence === record.offerSequence),
+  );
+  return mergeState(network, { escrows: [...withoutDuplicate, record] });
+}
+
+export function updateEscrowStatus(
+  network: NetworkName,
+  owner: string,
+  offerSequence: number,
+  status: EscrowRecord["status"],
+): IssuanceState {
+  const state = loadState(network);
+  const escrows = (state.escrows ?? []).map((entry) =>
+    entry.owner === owner && entry.offerSequence === offerSequence ? { ...entry, status } : entry,
+  );
+  return mergeState(network, { escrows });
+}
+
+export function listRecordedEscrows(network: NetworkName, owner?: string): EscrowRecord[] {
+  const escrows = loadState(network).escrows ?? [];
+  return owner ? escrows.filter((entry) => entry.owner === owner) : escrows;
 }
