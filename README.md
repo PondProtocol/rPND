@@ -11,7 +11,7 @@ It is an MPT rather than an IOU because rewards need things an IOU cannot do: a 
 
 This repository is the **operator source of truth** for Pond Protocol's on-ledger token configuration and issuance tooling: $rPND's parameters, its XLS-89 metadata, and the scripts that configure an issuer and create the issuance. It also carries the issuance path for the sibling IOU, **$PND**.
 
-The tooling currently assumes one cold account issues both assets. That is an inherited default, **not a decision** — the $PND issuer is assigned and the $rPND issuer is still undecided. See [one cold account or two](docs/issuance.md#one-cold-account-or-two).
+The tooling assumes one cold account issues both assets, and that is now the settled design, not just an inherited default: the owner has confirmed `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` as the issuer of both $PND and $rPND. See [one cold account or two](docs/issuance.md#one-cold-account-or-two) for the confirmation and the coupling — and the blackholing ordering constraint — it creates.
 
 Where another Pond Protocol repo describes a token, `config/tokens.json` and `src/issuance.ts` here are authoritative on any mismatch.
 
@@ -167,15 +167,16 @@ $rPND is **not issued** on any network from this repo. There is no `MPTokenIssua
 
 > [!WARNING]
 > **The current config cannot be created on mainnet.** It sets `immutable.canClawback`, so the create carries `ImmutableFlags`, which requires the DynamicMPT amendment. Verified against Testnet using this repo's own builder: the create returns **`temDISABLED`**, and succeeds only with `ImmutableFlags` removed. Resolving this is a pre-issuance decision — either wait for DynamicMPT, or create without the freeze and accept that the no-clawback guarantee is then policy rather than ledger-enforced. This does not affect the $PND launch.
+>
+> **This blocker also gates blackholing the shared issuer.** `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` issues both $PND and $rPND, and a blackholed account can never sign again — so `MPTokenIssuanceCreate` must succeed *before* that issuer is ever blackholed, or $rPND can never be created on this address. Since the create cannot succeed on mainnet today for the reason above, blackholing is blocked on two independent grounds until this config drops `ImmutableFlags` or `DynamicMPT` activates. See [`docs/issuance.md`](docs/issuance.md#one-cold-account-or-two).
 
 ### Open questions
 
 Tracked for the owner; none of these are decided:
 
 - `MPTokenIssuanceID` for $rPND, per network — does not exist until `MPTokenIssuanceCreate` succeeds
-- Whether $rPND is issued from the same cold account as $PND, which would couple their account flags, `Domain`, and reserve exposure
 - $PND clawback and allow-listing, which close permanently at the issuer's first trust line
-- $PND distribution topology — one operational account, several, or staged tranches
+- $PND distribution topology beyond the Treasury/Operations split already decided — whether either account is further subdivided (e.g. a separate market-making account)
 - Whether to issue $rPND before DynamicMPT activates, which decides how many of the flag choices below are permanent
 - Whether to drop `immutable.canClawback` so a create can succeed on mainnet today, or wait for the amendment
 - Whether `canEscrow` should be enabled at create — it is not in the config at all, and on mainnet it cannot be added later, so creating without it forfeits escrow-based lockups and vesting

@@ -45,6 +45,6 @@ This is a comparison of ledger primitives. The economic relationship between the
 
 $PND is an issued currency with code `PND`. This repo does not convert it to an MPT, and the tradeoff table above shows why that is defensible on its own terms: an IOU works in every wallet, explorer, and venue today, with no dependency on the MPTokens amendment, and it can be traded on the DEX — which an MPT still cannot. The `pnd` repo documents $PND for holders and integrators, and covers the same comparison from the IOU side.
 
-Whether $rPND is issued from the same cold account is undecided; see [`issuance.md`](issuance.md#one-cold-account-or-two).
+$rPND is issued from the same cold account as $PND — settled by the owner, not undecided; see [`issuance.md`](issuance.md#one-cold-account-or-two) for the coupling and the blackholing ordering constraint it creates.
 
 TODO (owner): the economic division of roles between the two tokens is not yet defined in the `protocol` repo. State it in [`../README.md`](../README.md) once decided. What is true on ledger today: they are separate assets, the pairing is recorded only as `additional_info.paired_iou_currency` metadata, and no ledger mechanism binds them.

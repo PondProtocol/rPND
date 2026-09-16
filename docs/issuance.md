@@ -20,31 +20,37 @@ Amendment status is a point-in-time observation. Re-check it against the live le
 
 ## Accounts
 
-XRPL IOU practice is two keys:
+XRPL IOU practice is two keys, extended here to four named roles now that the topology is decided:
 
-1. **Issuer (cold)** — `AccountSet` + issues $PND + creates $rPND. Keep this seed offline in production.
-2. **Operational (hot)** — opens the $PND trust line, authorizes $rPND, holds inventory for distribution.
+1. **Issuer (cold)** — `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc`. `AccountSet` + issues $PND + creates $rPND. Keep this seed offline in production. Funded on mainnet with 2.539034 XRP; completely unconfigured (`Flags` 0, `OwnerCount` 0).
+2. **Treasury** — `rPNDcL2UrGtSoGwruWx6ocMQ6ey8uPZm2b`. Holds the 90B $PND vesting escrow (see the escrow vesting design). **Not funded** — `account_info` returns `actNotFound` on mainnet.
+3. **Operations** — `rPNDAwFzgXzsjvUbVWz1ErB28v9SkcR2in`. Opens the $PND trust line, authorizes $rPND, holds the 10B distribution/liquidity inventory, and creates the AMM pool. **Not funded** — `account_info` returns `actNotFound` on mainnet.
+4. **Bot-ops (recommended, not yet created)** — a dedicated fourth account for any automation that needs a signing key. **Never Operations, and never the Issuer or Treasury.** Operations holds the 10B liquidity allocation and must not double as the bot's wallet; a compromised bot key on Operations would put that allocation at risk. The recommended shape is a regular key on a new, bounded account funded with 5–10 XRP and no $PND trust line — see the bot custody design.
 
-`npx tsx src/cli.ts fund` creates both via the network faucet and writes `var/<network>-wallets.json`. Copy seeds into `.env` as `ISSUER_SEED` and `OPERATIONAL_SEED`.
+`npx tsx src/cli.ts fund` creates disposable faucet-funded issuer and operational wallets for **rehearsal only**, via `ISSUER_SEED` and `OPERATIONAL_SEED`. It has no concept of Treasury or bot-ops accounts; treat any rehearsal of those roles as a second faucet-funded "operational" wallet under a different name until the tooling is extended.
 
-### One cold account or two?
+### One cold account, or two? — settled
 
-This tooling assumes a **single** cold account issues both assets: `ISSUER_SEED` signs the $PND `AccountSet` and `Payment` as well as the $rPND `MPTokenIssuanceCreate`. That is an inherited default, not a decision.
+**One.** The owner has confirmed that `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` issues both $PND and $rPND. `ISSUER_SEED` signing the $PND `AccountSet`/`Payment` and the $rPND `MPTokenIssuanceCreate` with the same key is therefore the intended design, not an inherited default that still needs a decision.
 
-The owner has designated `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` as the **$PND issuer**. It is **not** assigned as the $rPND issuer, and `rpnd-spec.md` deliberately still lists the $rPND issuer as TODO.
+Verified live at the time of confirmation: the address is funded with 2.539034 XRP, `Flags` reads `0`, `OwnerCount` reads `0`, and no `AccountSet`, `Payment`, or `MPTokenIssuanceCreate` has ever been submitted from it. On testnet and devnet the address still returns `actNotFound` — rehearsal accounts must come from a network faucet and are disposable.
 
-Verified at time of writing: the address has a valid checksum but `account_info` returns `actNotFound` on mainnet, testnet, and devnet. The account does not exist yet, holds no XRP, and has no trust lines or other owner-directory objects. Everything in [Decisions that close at the first trust line](#decisions-that-close-at-the-first-trust-line) is therefore still open.
-
-If one account issues both, the two assets are coupled in ways that cannot be undone selectively:
+Sharing one account couples the two assets in ways that cannot be undone selectively:
 
 - **Account flags are shared.** `AccountSet` is per account, not per asset. `asfDefaultRipple`, `asfRequireAuth`, `asfGlobalFreeze`, `asfNoFreeze`, and `asfAllowTrustLineClawback` apply to the account, so an IOU policy choice made for $PND also lands on anything else that account issues. Several of these are irreversible.
 - **`Domain` is shared.** One account has one `Domain`, so both assets resolve to the same XLS-26 `xrp-ledger.toml` and the same operator identity.
 - **Reserve and key exposure are shared.** Each `MPTokenIssuance` costs the issuer 0.2 XRP in owner reserve, and every holder's MPT balance is tracked in the issuer's owner directory too. One compromised or unusable cold key affects both assets at once.
 - **Blast radius is shared.** `asfGlobalFreeze` on the account freezes all its IOUs together.
 
-Note that MPT capability flags are per issuance and so are *not* shared — the coupling is on the IOU/account side. Using a separate cold account for $rPND would decouple all of the above at the cost of a second key to custody and a second `Domain` or a shared one by convention.
+Note that MPT capability flags are per issuance and so are *not* shared — the coupling is on the IOU/account side.
 
-TODO (owner): decide whether $rPND is issued from this same account or a separate one. The decision is only cheap while the $rPND issuance does not exist. It does not block the $PND launch, but issuing $PND first from this account does constrain what a shared-account $rPND would inherit.
+#### The blackholing trap a shared issuer creates
+
+A blackholed account can never sign again: no `AccountSet`, no `Payment`, no `MPTokenIssuanceCreate`. Because this issuer is shared, **if $rPND is ever going to exist, its `MPTokenIssuanceCreate` must be submitted before this issuer is ever blackholed** — never after. Blackholing first forecloses $rPND on this address permanently, with no recovery.
+
+That ordering is moot in practice right now, because this repo's own committed $rPND config cannot be created on mainnet at all: it sets `ImmutableFlags` (to freeze `tfMPTCanClawback` permanently off), `ImmutableFlags` requires the **`DynamicMPT`** amendment, and `DynamicMPT` is **not enabled on mainnet**. Submitting the create as configured to a network that mirrors mainnet's amendment set (Testnet) returns `temDISABLED`; the identical transaction with `ImmutableFlags` removed returns `tesSUCCESS`.
+
+So blackholing this issuer is blocked on two independent grounds: it must not happen before $rPND exists on this address (if $rPND is ever wanted at all), and separately, the $rPND config as currently written cannot even be created on mainnet, so there is nothing yet to sequence before a blackhole. Either of two things clears the second blocker: drop `ImmutableFlags` from the $rPND config (accepting "no clawback" as unenforced policy until `DynamicMPT` activates, not a ledger-frozen guarantee), or wait for `DynamicMPT` to activate on mainnet. Do not treat "blackhole once `Domain` is permanent" as sufficient by itself — check both conditions first.
 
 ## $PND (IOU)
 
@@ -76,15 +82,9 @@ A trust line limit is the maximum the *holder* is willing to accept from the iss
 
 `pnd.operationalTrustLimit` is now `100000000000`, matching the 100,000,000,000 total supply the owner set for $PND and documented in the `pnd` repo. It was previously `1000000000` — one hundredth of that — which meant a single operational account could not take delivery of full supply. Unlike the MPT's `AssetScale` and `MaximumAmount`, a trust limit is not permanent: the holder can raise or lower it with another `TrustSet` at any time, so this is a safe default rather than a commitment.
 
-Raising the default does not by itself decide the topology, and a limit at or above full supply is compatible with all of these:
+**The topology is decided: two accounts, not one.** The owner has named Treasury (`rPNDcL2UrGtSoGwruWx6ocMQ6ey8uPZm2b`, holding the 90B vesting escrow) and Operations (`rPNDAwFzgXzsjvUbVWz1ErB28v9SkcR2in`, holding the 10B circulating allocation and creating the AMM pool) as separate accounts. Each needs its own `TrustSet` and its own `--limit` — `buildPndTrustSet` accepts a `limit` override, and `issue-pnd` accepts `--value`, so this works without a config change to the single-account default the CLI still assumes. Neither account is funded on ledger yet (`account_info` returns `actNotFound` for both on mainnet), so nothing above has actually run.
 
-- **Single operational account.** Simplest, and what the CLI assumes. One hot key is exposed to the entire distributable supply.
-- **Multiple operational accounts.** Each opens its own trust line, so `--limit` should be passed per account rather than relying on the default. Splits key risk; more accounts to fund and track.
-- **Staged distribution.** Keep the limit high but issue in tranches, so undelivered supply stays as issuer obligation rather than sitting in a hot wallet.
-
-`buildPndTrustSet` accepts a `limit` override, and `issue-pnd` accepts `--value`, so any of these works without a config change.
-
-TODO (owner): choose the topology before mainnet. Full supply reachable by one hot key is the current default, and it is a custody decision rather than a technical constraint.
+This is narrower than a full custody decision: it fixes the Treasury/Operations split, but leaves open whether Operations is further subdivided (e.g. a separate market-making account) or whether a fifth account is ever added for that. It does **not** answer bot custody — a bot must never hold Operations' key, since Operations carries the 10B liquidity allocation. Any bot automation gets its own bounded account, separate from all four named here; see the bot custody design.
 
 ## $rPND (MPT)
 
@@ -97,6 +97,8 @@ Requires an MPT-capable network. `MPTokensV1` is live on mainnet, Testnet, and D
 `AssetScale` and `MaximumAmount` are fixed for the life of the issuance. Review them before the create transaction.
 
 **As configured, step 1 fails on mainnet.** `tifMPTCanClawback` is requested via `ImmutableFlags`, which needs `DynamicMPT`. Where the amendment is absent the create returns `temDISABLED`; where it is present, clawback is genuinely frozen off. The decision is to wait for the amendment or to create without the freeze and treat "no clawback" as policy rather than an on-ledger guarantee. Note that on a pre-`DynamicMPT` network no flag can be enabled afterwards either, so an unfrozen clawback flag cannot actually be switched on until the amendment lands — at which point it could be, unless frozen promptly.
+
+**This same blocker gates blackholing the issuer, since the issuer is shared with $PND** — see [the blackholing trap a shared issuer creates](#the-blackholing-trap-a-shared-issuer-creates) above. Do not blackhole `rPNDRmfNNrUZstkA23haCUkCp7qLEPnaYc` before this create has succeeded, if $rPND is ever going to exist.
 
 $rPND issuance is not on the $PND launch path; none of this blocks $PND.
 
