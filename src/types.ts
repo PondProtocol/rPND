@@ -78,10 +78,33 @@ export interface MptAmount {
   value: string;
 }
 
+/**
+ * A recorded `EscrowCreate`. Persisted the moment a create succeeds, because
+ * its `Sequence` becomes the `OfferSequence` an `EscrowFinish`/`EscrowCancel`
+ * needs — potentially months later — and losing it is the most expensive
+ * mistake to make in the whole vesting plan. `account_objects` on `owner` is
+ * the recovery path if this file is ever lost; see `listEscrows` in
+ * `src/escrow.ts`.
+ */
+export interface EscrowRecord {
+  owner: string;
+  offerSequence: number;
+  destination: string;
+  currency: string;
+  issuer: string;
+  value: string;
+  finishAfter?: string;
+  cancelAfter?: string;
+  createTxHash: string;
+  label?: string;
+  status: "open" | "finished" | "cancelled";
+}
+
 export interface IssuanceState {
   network: NetworkName;
   issuerAddress?: string;
   operationalAddress?: string;
   rpndIssuanceId?: string;
+  escrows?: EscrowRecord[];
   updatedAt: string;
 }
