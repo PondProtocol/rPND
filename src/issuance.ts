@@ -21,6 +21,110 @@ export function pndAmount(issuer: string, value: string, config: TokenConfig): I
   };
 }
 
+/**
+ * The `asf*` account flags this toolkit can build a standalone AccountSet
+ * for. `SetFlag`/`ClearFlag` carry exactly one value per transaction, so
+ * each of these is its own transaction, never combined.
+ */
+export const ISSUER_FLAG_VALUES = {
+  defaultRipple: AccountSetAsfFlags.asfDefaultRipple,
+  requireAuth: AccountSetAsfFlags.asfRequireAuth,
+  noFreeze: AccountSetAsfFlags.asfNoFreeze,
+  allowTrustLineClawback: AccountSetAsfFlags.asfAllowTrustLineClawback,
+  allowTrustLineLocking: AccountSetAsfFlags.asfAllowTrustLineLocking,
+} as const satisfies Record<string, AccountSetAsfFlags>;
+
+export type IssuerFlagName = keyof typeof ISSUER_FLAG_VALUES;
+
+export function isIssuerFlagName(value: string): value is IssuerFlagName {
+  return value in ISSUER_FLAG_VALUES;
+}
+
+/**
+ * A single, standalone `AccountSet` that sets or clears exactly one `asf`
+ * flag and nothing else — the shape every launch-critical flag decision
+ * (clawback, NoFreeze, RequireAuth, trust-line locking) actually needs.
+ * `buildIssuerAccountSet` below stays reserved for the "main" configuration
+ * transaction (DefaultRipple + Domain + TransferRate + TickSize).
+ */
+export function buildIssuerFlagAccountSet(params: {
+  issuerAddress: string;
+  flag: IssuerFlagName;
+  mode?: "set" | "clear";
+}): AccountSet {
+  const tx: AccountSet = {
+    TransactionType: "AccountSet",
+    Account: params.issuerAddress,
+  };
+  const flagValue = ISSUER_FLAG_VALUES[params.flag];
+  if ((params.mode ?? "set") === "clear") {
+    tx.ClearFlag = flagValue;
+  } else {
+    tx.SetFlag = flagValue;
+  }
+  return tx;
+}
+
+/** A chosen configuration of the launch-critical, one-flag-per-transaction decisions. */
+export interface IssuerFlagPlan {
+  /** `asfAllowTrustLineClawback` (16) — now-or-never, before any owner-directory object. */
+  clawback?: boolean;
+  /** `asfRequireAuth` (2) — now-or-never, before the first trust line. */
+  requireAuth?: boolean;
+  /** `asfNoFreeze` (6) — permanent; must be signed with the master key. */
+  noFreeze?: boolean;
+  /** `asfAllowTrustLineLocking` (17) — reversible, no deadline; required before any escrow of this issuer's currency. */
+  allowTrustLineLocking?: boolean;
+}
+
+export function assertFlagPlanNotContradictory(plan: IssuerFlagPlan): void {
+  if (plan.clawback && plan.noFreeze) {
+    throw new Error(
+      "asfAllowTrustLineClawback and asfNoFreeze are permanently mutually exclusive on the same account " +
+        "(enabling one forecloses the other with tecNO_PERMISSION). Refusing to build a configuration that requests both.",
+    );
+  }
+}
+
+/**
+ * Build the full ordered sequence of `AccountSet` transactions for a chosen
+ * flag configuration, following the launch runbook's ordering: any now-or-never
+ * flags first (clawback, then RequireAuth — both close at the first trust line),
+ * then the main configuration transaction (DefaultRipple/Domain/TransferRate/TickSize),
+ * then NoFreeze, then the escrow-locking flag. Guards against the one
+ * contradictory pair; every flag is otherwise optional and caller-chosen.
+ */
+export function buildIssuerConfigurationSequence(params: {
+  issuerAddress: string;
+  config: TokenConfig;
+  domain?: string;
+  plan: IssuerFlagPlan;
+}): AccountSet[] {
+  assertFlagPlanNotContradictory(params.plan);
+
+  const txs: AccountSet[] = [];
+  if (params.plan.clawback) {
+    txs.push(buildIssuerFlagAccountSet({ issuerAddress: params.issuerAddress, flag: "allowTrustLineClawback" }));
+  }
+  if (params.plan.requireAuth) {
+    txs.push(buildIssuerFlagAccountSet({ issuerAddress: params.issuerAddress, flag: "requireAuth" }));
+  }
+  txs.push(
+    buildIssuerAccountSet({
+      issuerAddress: params.issuerAddress,
+      config: params.config,
+      ...(params.domain ? { domain: params.domain } : {}),
+    }),
+  );
+  if (params.plan.noFreeze) {
+    txs.push(buildIssuerFlagAccountSet({ issuerAddress: params.issuerAddress, flag: "noFreeze" }));
+  }
+  if (params.plan.allowTrustLineLocking) {
+    txs.push(buildIssuerFlagAccountSet({ issuerAddress: params.issuerAddress, flag: "allowTrustLineLocking" }));
+  }
+  return txs;
+}
+
 export function rpndAmount(issuanceId: string, value: string): MptAmount {
   return {
     mpt_issuance_id: issuanceId,
@@ -32,6 +136,16 @@ export function buildIssuerAccountSet(params: {
   issuerAddress: string;
   config: TokenConfig;
   domain?: string;
+  /**
+   * Override which single `asf` flag (if any) this AccountSet carries.
+   * Defaults to the existing behaviour — `asfDefaultRipple` when
+   * `pnd.defaultRipple` is true — so existing call sites are unaffected.
+   * Pass `null` to omit any flag, or a name from `IssuerFlagName` to set a
+   * different one on this same transaction. For a flag transaction with no
+   * other fields (the shape every other launch-critical flag decision
+   * actually needs), use `buildIssuerFlagAccountSet` instead.
+   */
+  flag?: IssuerFlagName | null;
 }): AccountSet {
   const { pnd } = params.config;
   let flags = 0;
@@ -45,7 +159,11 @@ export function buildIssuerAccountSet(params: {
     TickSize: pnd.tickSize,
   };
 
-  if (pnd.defaultRipple) {
+  if (params.flag !== undefined) {
+    if (params.flag !== null) {
+      tx.SetFlag = ISSUER_FLAG_VALUES[params.flag];
+    }
+  } else if (pnd.defaultRipple) {
     tx.SetFlag = AccountSetAsfFlags.asfDefaultRipple;
   }
   if (flags !== 0) {
