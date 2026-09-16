@@ -138,11 +138,16 @@ npx tsx src/cli.ts status
 
 `issue-rpnd` creates the MPT, has the operational account authorize it, and mints the configured initial amount. Pass `--create-only` to skip authorize + mint.
 
+Issuer flags (clawback, `RequireAuth`, `NoFreeze`, the escrow-locking flag) and escrow (`EscrowCreate`/`EscrowFinish`/`EscrowCancel`, including a dated vesting-tranche schedule) each have their own commands — `issuer-flag`, `issuer-flag-sequence`, `escrow-create`, `escrow-finish`, `escrow-cancel`, `escrow-schedule`, `escrow-status`. See [`docs/issuance.md`](docs/issuance.md#issuer-flags-issuer-flag-and-issuer-flag-sequence) for the details, live guards, and the offline-signing `--prepare` flag every signing command accepts.
+
 ## Layout
 
 - `config/tokens.json` — canonical $PND / $rPND parameters
 - `config/xrp-ledger.toml.template` — XLS-26 file to host at `/.well-known/xrp-ledger.toml`
-- `src/issuance.ts` — AccountSet, TrustSet, Payment, MPTokenIssuanceCreate, MPTokenAuthorize builders
+- `src/issuance.ts` — AccountSet, TrustSet, Payment, MPTokenIssuanceCreate, MPTokenAuthorize builders, plus the per-flag `AccountSet` builders (`buildIssuerFlagAccountSet`, `buildIssuerConfigurationSequence`)
+- `src/escrow.ts` — EscrowCreate/EscrowFinish/EscrowCancel builders, the dated vesting-tranche schedule generator, and live escrow/supply reporting
+- `src/guards.ts` — live ledger guards: the clawback-window check (`account_objects`, never `OwnerCount`), the clawback/NoFreeze exclusivity check, and the escrow preconditions check (locking flag + zero `TransferRate`)
+- `src/prepare.ts` — unsigned transaction preparation for offline signing (`--prepare`), no wallet or seed involved
 - `src/cli.ts` — operator commands
 - `docs/` — see below
 
