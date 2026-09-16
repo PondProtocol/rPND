@@ -11,7 +11,12 @@ export async function submitTx(
   tx: SubmittableTransaction,
   wallet: Wallet,
   label: string,
-): Promise<{ hash: string; meta: TransactionMetadata | string | undefined }> {
+): Promise<{
+  hash: string;
+  meta: TransactionMetadata | string | undefined;
+  /** The transaction as actually signed and submitted — has the real Sequence, Fee, etc. `tx` passed in is never mutated. */
+  submitted: SubmittableTransaction;
+}> {
   const response = await client.submitAndWait(tx, { wallet, autofill: true });
   const meta = response.result.meta;
   const result =
@@ -19,7 +24,7 @@ export async function submitTx(
       ? meta.TransactionResult
       : undefined;
   assertTesSuccess(result, label);
-  return { hash: response.result.hash, meta };
+  return { hash: response.result.hash, meta, submitted: response.result.tx_json };
 }
 
 export function writeSecretsFile(

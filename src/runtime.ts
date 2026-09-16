@@ -32,15 +32,27 @@ export async function connectRuntime(overrides?: {
   return { config, network: resolved.name, websocket: resolved.websocket, client };
 }
 
-export function walletFromSeed(seed: string | undefined, role: string): Wallet {
+function assertSeedAllowed(role: string, network: NetworkName | undefined): void {
+  if (network === "mainnet") {
+    throw new Error(
+      `Refusing to build a mainnet ${role} wallet from a seed. This toolkit never reads a mainnet signing ` +
+        "seed from the environment or the command line — every mainnet transaction must be prepared unsigned " +
+        "(pass --prepare) and signed offline instead.",
+    );
+  }
+}
+
+export function walletFromSeed(seed: string | undefined, role: string, network?: NetworkName): Wallet {
+  assertSeedAllowed(role, network);
   if (!seed?.trim()) {
     throw new Error(`Missing ${role} seed. Set the env var or pass --${role}-seed.`);
   }
   return Wallet.fromSeed(seed.trim());
 }
 
-export function optionalWallet(seed: string | undefined): Wallet | undefined {
+export function optionalWallet(seed: string | undefined, network?: NetworkName): Wallet | undefined {
   if (!seed?.trim()) return undefined;
+  assertSeedAllowed("optional", network);
   return Wallet.fromSeed(seed.trim());
 }
 
